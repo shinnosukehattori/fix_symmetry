@@ -10,7 +10,7 @@ lattice         fcc 4.52
 region          box block 0 2 0 2 0 2 units lattice
 create_box      1 box
 create_atoms    1 box
-#read_data       cu32.dat
+#read_data       cu.dat
 
 mass            1 63.546  # Mass of Copper
 
@@ -29,12 +29,12 @@ dump            1 all custom 1 dump.symmetry_test.lammpstrj id type x y z fx fy 
 # Set up minimization
 min_style       cg
 fix             1 all box/relax aniso 0.0
-minimize        1e-9 1e-9 1000 10000
+minimize        1e-9 1e-9 10 10
 
 unfix           1
 fix             1 all nvt temp 300 300 0.1
 
 # Run the simulation
-velocity        all create 300 4928459 dist gaussian
-run 100
+#velocity        all create 300 4928459 dist gaussian
+#run 100
 

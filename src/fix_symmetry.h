@@ -17,6 +17,8 @@ FixStyle(symmetry,FixSymmetry);
 #include <vector>
 #include <array>
 
+#include "spglib.h"
+
 namespace LAMMPS_NS {
 
 class FixSymmetry : public Fix {
@@ -30,28 +32,52 @@ class FixSymmetry : public Fix {
 
  private:
   int spacegroup_number;
-  double tolerance;  // Tolerance for position displacement
+  double symprec;  // Tolerance for position displacement
+  bool symforce;   // Symmetrize forces
+  bool symstress;  // Symmetrize stress
+  bool debug;
+
+  double std_cell[3][3];
+  double prim_cell[3][3];
 
   std::vector<std::array<std::array<double, 3>, 3>> symmetry_matrices;
   std::vector<std::array<double, 3>> translation_vectors;
-  std::vector<std::vector<int>> symm_map;  // Atom mapping for symmetry operations
 
-  // Previous atom positions for displacement monitoring
+  SpglibDataset *dataset;
   double **prev_positions;
+  double **all_positions;
+  int *all_types;
+
+  std::vector<int> mapping_to_primitive;
+  std::vector<int> std_mapping_to_primitive;
 
   // Symmetrization functions
-  void generate_symmetry_operations();
+  bool need_to_update_symmetry();
+  int get_index(std::vector<int> &vec, int val);
+  void store_std_cell();
+  void restore_std_cell();
+
+  void adjest_cell();
+  void adjest_positions();
+  void adjest_forces();
+  void adjest_stress();
+
+  void print_symmetry();
+  void refine_symmetry();
+  void check_and_symmetrize_cell();
+  void symmetrize_cell();
+  void check_and_symmetrize_positions();
   void symmetrize_positions();
+
+  void initial_prep();
+  void prep_symmetry();
+  void check_symmetry(bool do_find_prim);
+
   void symmetrize_forces();
   void symmetrize_stress();
-  void symmetrize_cell();
 
   void symmetrize_rank1(std::vector<double[3]> &vec);
   void symmetrize_rank2(double vec[3][3]);
-
-  bool need_to_update_symmetry();
-  void set_lattice_from_domain(double lattice[3][3]);
-
 };
 
 

@@ -2,7 +2,7 @@
 
 ## Overview
 
-`FixSymmetry` is a custom LAMMPS fix that enforces crystal symmetry during simulations. It utilizes the `spglib` library to obtain symmetry operations based on the specified space group.
+`FixSymmetry` is a custom LAMMPS fix that enforces crystal symmetry during simulations, porting from ase. It utilizes the `spglib` library to obtain symmetry operations based on the specified space group.
 
 This guide provides step-by-step instructions to install `FixSymmetry` into LAMMPS and run a test simulation to verify its functionality.
 
