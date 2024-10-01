@@ -40,8 +40,9 @@ class FixSymmetry : public Fix {
   double std_cell[3][3];
   double prim_cell[3][3];
 
-  std::vector<std::array<std::array<double, 3>, 3>> symmetry_matrices;
+  std::vector<std::array<std::array<double, 3>, 3>> rotation_matrices;
   std::vector<std::array<double, 3>> translation_vectors;
+  std::vector<std::array<double, 3>> symm_map;
 
   SpglibDataset *dataset;
   double **prev_positions;
@@ -57,10 +58,12 @@ class FixSymmetry : public Fix {
   void store_std_cell();
   void restore_std_cell();
 
-  void adjest_cell();
-  void adjest_positions();
-  void adjest_forces();
-  void adjest_stress();
+  void adjust_cell();
+  void adjust_positions();
+  void adjust_forces();
+  void adjust_stress();
+
+  void x2lambda(const double pos[3], double lambda[3]);
 
   void print_symmetry();
   void refine_symmetry();
@@ -78,6 +81,7 @@ class FixSymmetry : public Fix {
 
   void symmetrize_rank1(std::vector<double[3]> &vec);
   void symmetrize_rank2(double vec[3][3]);
+
 };
 
 

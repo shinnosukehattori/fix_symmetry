@@ -105,12 +105,15 @@ void FixSymmetry::init() {
 
 void FixSymmetry::post_force(int vflag) {
   // Monitor atom displacement and update symmetry operations if needed
-  if (need_to_update_symmetry()) {
+  // if (need_to_update_symmetry()) {
+  if (1) {
+    adjust_cell();
+    adjust_positions();
     if (symforce) {
-      symmetrize_forces();
+      adjust_forces();
     }
     if (symstress) {
-      symmetrize_stress();
+      adjust_stress();
     }
   }
 }
@@ -187,17 +190,85 @@ void FixSymmetry::restore_std_cell() {
 }
 
 
-void FixSymmetry::adjest_cell() {
+void FixSymmetry::adjust_cell() {
   store_std_cell();
+  symmetrize_rank2(std_cell);
+  restore_std_cell();
 }
 
-void FixSymmetry::adjest_positions() {
+void FixSymmetry::adjust_positions() {
+  double **x = atom->x;
+  int nlocal = atom->nlocal;
+
+  std::vector<double[3]> pos(nlocal);
+  for (int i = 0; i < nlocal; i++) {
+    pos[i][0] = x[i][0];
+    pos[i][1] = x[i][1];
+    pos[i][2] = x[i][2];
+  }
+
+  // Symmetrize Positions
+  symmetrize_rank1(pos);
+
+  // Update 
+  for (int i = 0; i < nlocal; i++) {
+    x[i][0] = pos[i][0];
+    x[i][1] = pos[i][1];
+    x[i][2] = pos[i][2];
+  }
 }
 
-void FixSymmetry::adjest_forces() {
+void FixSymmetry::adjust_forces() {
+  double **f = atom->f;
+  int nlocal = atom->nlocal;
+
+  // Convert forces to vector format
+  std::vector<double[3]> forces(nlocal);
+  for (int i = 0; i < nlocal; i++) {
+    forces[i][0] = f[i][0];
+    forces[i][1] = f[i][1];
+    forces[i][2] = f[i][2];
+  }
+
+  // Symmetrize forces
+  symmetrize_rank1(forces);
+
+  // Update forces
+  for (int i = 0; i < nlocal; i++) {
+    f[i][0] = forces[i][0];
+    f[i][1] = forces[i][1];
+    f[i][2] = forces[i][2];
+  }
 }
 
-void FixSymmetry::adjest_stress() {
+void FixSymmetry::adjust_stress() {
+  // Get global stress tensor
+  double *stress = virial;
+  double stress_tensor[3][3];
+  stress_tensor[0][0] = stress[0];
+  stress_tensor[1][1] = stress[1];
+  stress_tensor[2][2] = stress[2];
+  stress_tensor[1][2] = stress_tensor[2][1] = stress[3];
+  stress_tensor[0][2] = stress_tensor[2][0] = stress[4];
+  stress_tensor[0][1] = stress_tensor[1][0] = stress[5];
+
+  // Symmetrize stress tensor
+  symmetrize_rank2(stress_tensor);
+
+  // Update stress tensor in LAMMPS
+  stress[0] = stress_tensor[0][0];
+  stress[1] = stress_tensor[1][1];
+  stress[2] = stress_tensor[2][2];
+  stress[3] = stress_tensor[1][2];
+  stress[4] = stress_tensor[0][2];
+  stress[5] = stress_tensor[0][1];
+}
+
+
+void FixSymmetry::x2lambda(const double pos[3], double lambda[3]) {
+  double inv_std_cell[3][3];
+  MathExtra::invert3(std_cell, inv_std_cell);
+  MathExtra::matvec(inv_std_cell, pos, lambda);
 }
 
 void FixSymmetry::print_symmetry() {
@@ -316,17 +387,8 @@ void FixSymmetry::initial_prep() {
   // Total number of atoms
   int natoms = atom->natoms;
 
-  // Allocate arrays for positoions and types
   memory->create(all_positions, natoms, 3, "fix_symmetry:all_positions");
   memory->create(all_types, natoms, "fix_symmetry:all_types");
-
-  // Initialize arrays
-  for (int i = 0; i < natoms; i++) {
-    all_positions[i][0] = 0.0;
-    all_positions[i][1] = 0.0;
-    all_positions[i][2] = 0.0;
-    all_types[i] = 0;
-  }
 
   // Store local positions and types
   for (int i = 0; i < nlocal; i++) {
@@ -345,11 +407,21 @@ void FixSymmetry::initial_prep() {
 void FixSymmetry::check_symmetry(bool do_find_prim) {
 
   int natoms = atom->natoms;
+  double (*my_all_positions)[3] = new double[natoms][3];
+
+  // copy all_positions to my_all_positions
+  for (int i = 0; i < natoms; i++) {
+    my_all_positions[i][0] = all_positions[i][0];
+    my_all_positions[i][1] = all_positions[i][1];
+    my_all_positions[i][2] = all_positions[i][2];
+  }
 
   store_std_cell();
-  dataset = spg_get_dataset(std_cell, (const double (*)[3])all_positions, (const int (*))all_types, (const int)natoms, symprec);
+  dataset = spg_get_dataset(std_cell, my_all_positions, all_types, natoms, symprec);
+
   if (dataset == nullptr) {
-    error->all(FLERR, "spg_get_dataset failed");
+    std::string spg_error_msg = spg_get_error_message(spg_get_error_code());
+    error->all(FLERR, spg_error_msg.c_str());
   }
   //add debug code to display all_positions and all_types
   if (debug) {
@@ -361,7 +433,7 @@ void FixSymmetry::check_symmetry(bool do_find_prim) {
   print_symmetry();
 
   if (do_find_prim) {
-    int find_prim = spg_find_primitive(std_cell, (double (*)[3])all_positions, all_types, natoms, symprec);
+    int find_prim = spg_find_primitive(std_cell, my_all_positions, all_types, natoms, symprec);
     printf("find_prim = %d, ", find_prim);
     for (int j = 0; j < 3; ++j) {
       for (int k = 0; k < 3; ++k) {
@@ -391,57 +463,23 @@ void FixSymmetry::check_symmetry(bool do_find_prim) {
   }
 }
 
-void FixSymmetry::symmetrize_forces() {
-  double **f = atom->f;
-  int nlocal = atom->nlocal;
-
-  // Convert forces to vector format
-  std::vector<double[3]> forces(nlocal);
-  for (int i = 0; i < nlocal; i++) {
-    forces[i][0] = f[i][0];
-    forces[i][1] = f[i][1];
-    forces[i][2] = f[i][2];
-  }
-
-  // Symmetrize forces
-  symmetrize_rank1(forces);
-
-  // Update forces
-  for (int i = 0; i < nlocal; i++) {
-    f[i][0] = forces[i][0];
-    f[i][1] = forces[i][1];
-    f[i][2] = forces[i][2];
-  }
-}
-
-void FixSymmetry::symmetrize_stress() {
-  // Get global stress tensor
-  double *stress = virial;
-  double stress_tensor[3][3];
-  stress_tensor[0][0] = stress[0];
-  stress_tensor[1][1] = stress[1];
-  stress_tensor[2][2] = stress[2];
-  stress_tensor[1][2] = stress_tensor[2][1] = stress[3];
-  stress_tensor[0][2] = stress_tensor[2][0] = stress[4];
-  stress_tensor[0][1] = stress_tensor[1][0] = stress[5];
-
-  // Symmetrize stress tensor
-  symmetrize_rank2(stress_tensor);
-
-  // Update stress tensor in LAMMPS
-  stress[0] = stress_tensor[0][0];
-  stress[1] = stress_tensor[1][1];
-  stress[2] = stress_tensor[2][2];
-  stress[3] = stress_tensor[1][2];
-  stress[4] = stress_tensor[0][2];
-  stress[5] = stress_tensor[0][1];
-}
-
 void FixSymmetry::prep_symmetry() {
   // Get symmetry operations
   int nsym = dataset->n_operations;
-  symmetry_matrices.clear();
+  rotation_matrices.clear();
   translation_vectors.clear();
+
+  std::vector<std::vector<double>> scaled_pos;
+  //eval scaled pos
+  for (int i = 0; i < atom->nlocal; i++) {
+    double pos[3];
+    pos[0] = atom->x[i][0];
+    pos[1] = atom->x[i][1];
+    pos[2] = atom->x[i][2];
+    x2lambda(pos, pos);
+    scaled_pos.push_back(std::vector<double>(pos, pos + 3));
+  }
+
   for (int i = 0; i < nsym; i++) {
     std::array<std::array<double, 3>, 3> R;
     std::array<double, 3> t;
@@ -451,14 +489,14 @@ void FixSymmetry::prep_symmetry() {
       }
       t[j] = dataset->translations[i][j];
     }
-    symmetry_matrices.push_back(R);
+    rotation_matrices.push_back(R);
     translation_vectors.push_back(t);
   }
 }
 
 void FixSymmetry::symmetrize_rank1(std::vector<double[3]> &vec) {
   int nlocal = atom->nlocal;
-  int nsym = symmetry_matrices.size();
+  int nsym = rotation_matrices.size();
 
   // Initialize symmetrized vectors
   std::vector<double[3]> sym_vec(nlocal);
@@ -472,7 +510,7 @@ void FixSymmetry::symmetrize_rank1(std::vector<double[3]> &vec) {
     double R[3][3];
     for (int i = 0; i < 3; ++i) {
       for (int j = 0; j < 3; ++j) {
-        R[i][j] = symmetry_matrices[k][i][j];
+        R[i][j] = rotation_matrices[k][i][j];
       }
     }
 
@@ -500,7 +538,7 @@ void FixSymmetry::symmetrize_rank1(std::vector<double[3]> &vec) {
 }
 
 void FixSymmetry::symmetrize_rank2(double tensor[3][3]) {
-  int nsym = symmetry_matrices.size();
+  int nsym = rotation_matrices.size();
 
   double sym_tensor[3][3];
   for (int i = 0; i < 3; i++) {
@@ -517,7 +555,7 @@ void FixSymmetry::symmetrize_rank2(double tensor[3][3]) {
 
     for (int i = 0; i < 3; ++i) {
       for (int j = 0; j < 3; ++j) {
-      R[i][j] = symmetry_matrices[k][i][j];
+      R[i][j] = rotation_matrices[k][i][j];
       }
     }
 
