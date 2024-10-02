@@ -37,6 +37,7 @@ class FixSymmetry : public Fix {
   bool symstress;  // Symmetrize stress
   bool debug;
 
+  double sym_cell[3][3];
   double prim_cell[3][3];
 
   double ***rotation_matrices;
@@ -78,8 +79,8 @@ class FixSymmetry : public Fix {
   void symmetrize_forces();
   void symmetrize_stress();
 
-  void symmetrize_rank1(std::vector<double[3]> &vec, double cell[3][3], double inv_cell[3][3]);
-  void symmetrize_rank2(double vec[3][3], double cell[3][3], double inv_cell[3][3]);
+  void symmetrize_rank1(std::vector<double[3]> &vec, const double cell[3][3], const double inv_cell[3][3]);
+  void symmetrize_rank2(double vec[3][3], const double cell[3][3], const double inv_cell[3][3]);
 
 };
 

@@ -108,11 +108,12 @@ void FixSymmetry::post_force(int vflag) {
 
     get_cell(cell);
     MathExtra::invert3(cell, inv_cell);
+    //MathExtra::transpose3(inv_cell, inv_cell);
     adjust_cell(cell, inv_cell);
 
     get_cell(cell);
     MathExtra::invert3(cell, inv_cell);
-    adjust_positions(cell, inv_cell);
+    //adjust_positions(cell, inv_cell);
     if (symforce) {
       adjust_forces(cell, inv_cell);
     }
@@ -195,8 +196,38 @@ void FixSymmetry::set_cell(double cell[3][3]) {
 
 
 void FixSymmetry::adjust_cell(double cell[3][3], double inv_cell[3][3]) {
-  symmetrize_rank2(cell, cell, inv_cell);
-  set_cell(cell);
+
+  double delta_defrom_grad[3][3];
+
+  MathExtra::transpose_times3(inv_cell, sym_cell, delta_defrom_grad);
+  delta_defrom_grad[0][0] -= 1.0;
+  delta_defrom_grad[1][1] -= 1.0;
+  delta_defrom_grad[2][2] -= 1.0;
+
+  double max_delta_grad = 0.0;
+  for (int i = 0; i < 3; i++) {
+    for (int j = 0; j < 3; j++) {
+      double delta = fabs(delta_defrom_grad[i][j]);
+      if (delta > max_delta_grad) {
+        max_delta_grad = delta;
+      }
+    }
+  }
+  if (max_delta_grad > 0.25){
+    error->all(FLERR, "Too large deformation gradient in FixSymmetry::adjust_cell");
+  } else if (max_delta_grad > 1.0) {
+    printf("Warning! max_delta_grad = %f\n", max_delta_grad);
+  }
+
+  symmetrize_rank2(delta_defrom_grad, cell, inv_cell);
+
+  delta_defrom_grad[0][0] += 1.0;
+  delta_defrom_grad[1][1] += 1.0;
+  delta_defrom_grad[2][2] += 1.0;
+
+  //update
+  MathExtra::transpose_times3(delta_defrom_grad, cell, sym_cell);
+  set_cell(sym_cell);
 }
 
 void FixSymmetry::adjust_positions(double cell[3][3], double inv_cell[3][3]) {
@@ -299,7 +330,6 @@ void FixSymmetry::symmetrize_cell() {
 
   // Get standard cell matrix
   double trans_std_cell[3][3];
-  double sym_cell[3][3];
   MathExtra::transpose_times3(dataset->transformation_matrix,  dataset->std_lattice, trans_std_cell);
   MathExtra::times3(trans_std_cell,  dataset->std_rotation_matrix, sym_cell);
 
@@ -312,7 +342,7 @@ void FixSymmetry::symmetrize_cell() {
   }
   printf("\n");
 
-  get_cell(sym_cell);
+  set_cell(sym_cell);
 }
 
 void FixSymmetry::check_and_symmetrize_positions(){
@@ -357,8 +387,9 @@ void FixSymmetry::symmetrize_positions() {
 
   for (int i=0; i < nlocal; i++) {
     if (debug) {
-      printf("mapping_to_primitive[%d] = %d\n", i, mapping_to_primitive[i]);
-      printf("std_mapping_to_primitive[%d] = %d\n", i, std_mapping_to_primitive[i]);
+      int j = mapping_to_primitive[i];
+      printf("mapping_to_primitive[%d] = %d\n", i, j);
+      printf("std_mapping_to_primitive[%d] = %d\n", j, std_mapping_to_primitive[j]);
     }
 
     int std_i = get_index(std_mapping_to_primitive, mapping_to_primitive[i]);
@@ -545,7 +576,7 @@ void FixSymmetry::prep_symmetry() {
   }
 }
 
-void FixSymmetry::symmetrize_rank1(std::vector<double[3]> &vec, double cell[3][3], double inv_cell[3][3]) {
+void FixSymmetry::symmetrize_rank1(std::vector<double[3]> &vec, const double cell[3][3], const double inv_cell[3][3]) {
   int nlocal = atom->nlocal;
   int nsym = dataset->n_operations;
 
@@ -596,7 +627,7 @@ void FixSymmetry::symmetrize_rank1(std::vector<double[3]> &vec, double cell[3][3
   }
 }
 
-void FixSymmetry::symmetrize_rank2(double tensor[3][3], double cell[3][3], double inv_cell[3][3]) {
+void FixSymmetry::symmetrize_rank2(double tensor[3][3], const double cell[3][3], const double inv_cell[3][3]) {
   int nlocal = atom->nlocal;
   int nsym = dataset->n_operations;
 
