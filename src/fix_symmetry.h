@@ -37,12 +37,11 @@ class FixSymmetry : public Fix {
   bool symstress;  // Symmetrize stress
   bool debug;
 
-  double std_cell[3][3];
   double prim_cell[3][3];
 
-  std::vector<std::array<std::array<double, 3>, 3>> rotation_matrices;
-  std::vector<std::array<double, 3>> translation_vectors;
-  std::vector<std::array<double, 3>> symm_map;
+  double ***rotation_matrices;
+  double **translation_vectors;
+  std::vector<std::vector<int>> symm_map;
 
   SpglibDataset *dataset;
   double **prev_positions;
@@ -55,13 +54,13 @@ class FixSymmetry : public Fix {
   // Symmetrization functions
   bool need_to_update_symmetry();
   int get_index(std::vector<int> &vec, int val);
-  void store_std_cell();
-  void restore_std_cell();
+  void get_cell(double cell[3][3]);
+  void set_cell(double cell[3][3]);
 
-  void adjust_cell();
-  void adjust_positions();
-  void adjust_forces();
-  void adjust_stress();
+  void adjust_cell(double cell[3][3], double inv_cell[3][3]);
+  void adjust_positions(double cell[3][3], double inv_cell[3][3]);
+  void adjust_forces(double cell[3][3], double inv_cell[3][3]);
+  void adjust_stress(double cell[3][3], double inv_cell[3][3]);
 
   void x2lambda(const double pos[3], double lambda[3]);
 
@@ -79,11 +78,10 @@ class FixSymmetry : public Fix {
   void symmetrize_forces();
   void symmetrize_stress();
 
-  void symmetrize_rank1(std::vector<double[3]> &vec);
-  void symmetrize_rank2(double vec[3][3]);
+  void symmetrize_rank1(std::vector<double[3]> &vec, double cell[3][3], double inv_cell[3][3]);
+  void symmetrize_rank2(double vec[3][3], double cell[3][3], double inv_cell[3][3]);
 
 };
-
 
 }
 
