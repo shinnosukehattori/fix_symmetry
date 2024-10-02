@@ -27,8 +27,11 @@ class FixSymmetry : public Fix {
   ~FixSymmetry();
   int setmask();
   void init();
+  void pre_force(int vflag);
+  void min_pre_force(int vflag);
   void post_force(int vflag);
   void min_post_force(int vflag);
+  void post_run(int vflag);
 
  private:
   int spacegroup_number;

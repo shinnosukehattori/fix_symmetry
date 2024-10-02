@@ -80,18 +80,29 @@ FixSymmetry::~FixSymmetry() {
 
 int FixSymmetry::setmask() {
   int mask = 0;
+  mask |= FixConst::PRE_FORCE;
+  mask |= FixConst::MIN_PRE_FORCE;
   mask |= FixConst::POST_FORCE;
   mask |= FixConst::MIN_POST_FORCE;
+  mask |= FixConst::POST_RUN;
   return mask;
 }
 
 void FixSymmetry::init() {
   // Save previous atom positions
-
   refine_symmetry();
   prep_symmetry();
+}
 
-  memory->create(prev_positions, atom->nlocal, 3, "fix_symmetry:prev_positions");
+
+void FixSymmetry::pre_force(int vflag) {
+
+  if (prev_positions != nullptr || 3*atom->nlocal != sizeof(prev_positions)) {
+    memory->destroy(prev_positions);
+  }
+  if (prev_positions == nullptr) {
+    memory->create(prev_positions, atom->nlocal, 3, "fix_symmetry:prev_positions");
+  }
   for (int i = 0; i < atom->nlocal; i++) {
     prev_positions[i][0] = atom->x[i][0];
     prev_positions[i][1] = atom->x[i][1];
@@ -113,7 +124,7 @@ void FixSymmetry::post_force(int vflag) {
 
     get_cell(cell);
     MathExtra::invert3(cell, inv_cell);
-    //adjust_positions(cell, inv_cell);
+    adjust_positions(cell, inv_cell);
     if (symforce) {
       adjust_forces(cell, inv_cell);
     }
@@ -123,8 +134,16 @@ void FixSymmetry::post_force(int vflag) {
   }
 }
 
+void FixSymmetry::min_pre_force(int vflag) {
+  pre_force(vflag);
+}
+
 void FixSymmetry::min_post_force(int vflag) {
   post_force(vflag);
+}
+
+void FixSymmetry::post_run(int vflag) {
+  check_symmetry(false);
 }
 
 bool FixSymmetry::need_to_update_symmetry() {
@@ -234,21 +253,21 @@ void FixSymmetry::adjust_positions(double cell[3][3], double inv_cell[3][3]) {
   double **x = atom->x;
   int nlocal = atom->nlocal;
 
-  std::vector<double[3]> pos(nlocal);
+  std::vector<double[3]> step(nlocal);
   for (int i = 0; i < nlocal; i++) {
-    pos[i][0] = x[i][0];
-    pos[i][1] = x[i][1];
-    pos[i][2] = x[i][2];
+    step[i][0] = x[i][0] - prev_positions[i][0];
+    step[i][1] = x[i][1] - prev_positions[i][1];
+    step[i][2] = x[i][2] - prev_positions[i][2];
   }
 
   // Symmetrize Positions
-  symmetrize_rank1(pos, cell, inv_cell);
+  symmetrize_rank1(step, cell, inv_cell);
 
   // Update 
   for (int i = 0; i < nlocal; i++) {
-    x[i][0] = pos[i][0];
-    x[i][1] = pos[i][1];
-    x[i][2] = pos[i][2];
+    x[i][0] = prev_positions[i][0] + step[i][0];
+    x[i][1] = prev_positions[i][1] + step[i][1];
+    x[i][2] = prev_positions[i][2] + step[i][2];
   }
 }
 
