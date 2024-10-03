@@ -82,7 +82,7 @@ int FixSymmetry::setmask() {
   int mask = 0;
   mask |= FixConst::PRE_FORCE;
   mask |= FixConst::MIN_PRE_FORCE;
-  mask |= FixConst::POST_FORCE;
+  mask |= FixConst::END_OF_STEP;
   mask |= FixConst::MIN_POST_FORCE;
   mask |= FixConst::POST_RUN;
   return mask;
@@ -96,7 +96,6 @@ void FixSymmetry::init() {
 
 
 void FixSymmetry::pre_force(int vflag) {
-
   if (prev_positions != nullptr || 3*atom->nlocal != sizeof(prev_positions)) {
     memory->destroy(prev_positions);
   }
@@ -110,7 +109,11 @@ void FixSymmetry::pre_force(int vflag) {
   }
 }
 
-void FixSymmetry::post_force(int vflag) {
+void FixSymmetry::min_pre_force(int vflag) {
+  pre_force(vflag);
+}
+
+void FixSymmetry::end_of_step() {
   // Monitor atom displacement and update symmetry operations if needed
   // if (need_to_update_symmetry()) {
   if (1) {
@@ -134,15 +137,12 @@ void FixSymmetry::post_force(int vflag) {
   }
 }
 
-void FixSymmetry::min_pre_force(int vflag) {
-  pre_force(vflag);
-}
-
 void FixSymmetry::min_post_force(int vflag) {
-  post_force(vflag);
+  end_of_step();
 }
 
-void FixSymmetry::post_run(int vflag) {
+void FixSymmetry::post_run() {
+  printf("post run ***CHECK SYMMETRY***\n");
   check_symmetry(false);
 }
 
@@ -189,11 +189,25 @@ void FixSymmetry::get_cell(double cell[3][3]) {
   cell[1][1] = domain->h[1];
   cell[2][2] = domain->h[2];
   if (domain->triclinic) {
-    cell[1][0] = cell[2][0] = cell[2][1] = 0.0;
-  } else {
     cell[1][0] = domain->xy;
     cell[2][0] = domain->xz;
     cell[2][1] = domain->yz;
+  } else {
+    cell[1][0] = cell[2][0] = cell[2][1] = 0.0;
+  }
+}
+
+void FixSymmetry::get_cell_transposed(double cell[3][3]) {
+  cell[1][0] = cell[2][0] = cell[2][1] = 0.0;
+  cell[0][0] = domain->h[0];
+  cell[1][1] = domain->h[1];
+  cell[2][2] = domain->h[2];
+  if (domain->triclinic) {
+    cell[0][1] = domain->xy;
+    cell[0][2] = domain->xz;
+    cell[1][2] = domain->yz;
+  } else {
+    cell[0][1] = cell[0][2] = cell[1][2] = 0.0;
   }
 }
 
@@ -201,12 +215,14 @@ void FixSymmetry::set_cell(double cell[3][3]) {
 
   // Update cell matrix
   domain->boxlo[0] = domain->boxlo[1] = domain->boxlo[2] = 0.0;
-  domain->boxhi[0] = MathExtra::len3(cell[0]);
-  domain->boxhi[1] = MathExtra::len3(cell[1]);
-  domain->boxhi[1] = MathExtra::len3(cell[2]);
-  domain->xy = cell[1][0];
-  domain->xz = cell[2][0];
-  domain->yz = cell[2][1];
+  domain->boxhi[0] = cell[0][0];
+  domain->boxhi[1] = cell[1][1];
+  domain->boxhi[2] = cell[2][2];
+  if (domain->triclinic) {
+    domain->xy = cell[1][0];
+    domain->xz = cell[2][0];
+    domain->yz = cell[2][1];
+  }
 
   // Update related parameters
   domain->set_global_box();
@@ -218,7 +234,7 @@ void FixSymmetry::adjust_cell(double cell[3][3], double inv_cell[3][3]) {
 
   double delta_defrom_grad[3][3];
 
-  MathExtra::transpose_times3(inv_cell, sym_cell, delta_defrom_grad);
+  MathExtra::times3(inv_cell, sym_cell, delta_defrom_grad);
   delta_defrom_grad[0][0] -= 1.0;
   delta_defrom_grad[1][1] -= 1.0;
   delta_defrom_grad[2][2] -= 1.0;
@@ -246,6 +262,15 @@ void FixSymmetry::adjust_cell(double cell[3][3], double inv_cell[3][3]) {
 
   //update
   MathExtra::transpose_times3(delta_defrom_grad, cell, sym_cell);
+  if (debug) {
+    printf("Symmetrized Cell Matrix (adj) = ");
+    for (int i = 0; i < 3; ++i) {
+      for (int j = 0; j < 3; ++j) {
+        printf("%f,", sym_cell[i][j]);
+      }
+    }
+    printf("\n");
+  }
   set_cell(sym_cell);
 }
 
@@ -323,7 +348,7 @@ void FixSymmetry::x2lambda(const double pos[3], double lambda[3]) {
   double cell[3][3];
   get_cell(cell);
   MathExtra::invert3(cell, inv_cell);
-  MathExtra::matvec(inv_cell, pos, lambda);
+  MathExtra::transpose_matvec(inv_cell, pos, lambda);
 }
 
 void FixSymmetry::print_symmetry() {
@@ -349,7 +374,9 @@ void FixSymmetry::symmetrize_cell() {
 
   // Get standard cell matrix
   double trans_std_cell[3][3];
-  MathExtra::transpose_times3(dataset->transformation_matrix,  dataset->std_lattice, trans_std_cell);
+  double std_cell[3][3];
+  MathExtra::transpose3(dataset->std_lattice, std_cell);
+  MathExtra::transpose_times3(dataset->transformation_matrix,  std_cell, trans_std_cell);
   MathExtra::times3(trans_std_cell,  dataset->std_rotation_matrix, sym_cell);
 
   //dump cell matrix
@@ -373,6 +400,8 @@ void FixSymmetry::symmetrize_positions() {
   double **x = atom->x;
   int nlocal = atom->nlocal;
 
+  double std_cell[3][3];
+  MathExtra::transpose3(dataset->std_lattice, std_cell);
   double rot_std_cell[3][3];
   double rot_prim_cell[3][3];
   double inv_rot_prim_cell[3][3];
@@ -386,7 +415,7 @@ void FixSymmetry::symmetrize_positions() {
     }
   }
 
-  MathExtra::times3(dataset->std_lattice,  dataset->std_rotation_matrix, rot_std_cell);
+  MathExtra::times3(std_cell,  dataset->std_rotation_matrix, rot_std_cell);
 
   int n_std = dataset->n_std_atoms;
   memory->create(rot_std_pos, n_std, 3, "fix_symmetry:rot_std_pos");
@@ -490,9 +519,9 @@ void FixSymmetry::check_symmetry(bool do_find_prim) {
     x2lambda(all_positions[i],scaled_all_positions[i]);
   }
 
-  double cell[3][3];
-  get_cell(cell);
-  dataset = spg_get_dataset(cell, scaled_all_positions, all_types, natoms, symprec);
+  double t_cell[3][3];
+  get_cell_transposed(t_cell);
+  dataset = spg_get_dataset(t_cell, scaled_all_positions, all_types, natoms, symprec);
 
   if (dataset == nullptr) {
     std::string spg_error_msg = spg_get_error_message(spg_get_error_code());
@@ -501,12 +530,12 @@ void FixSymmetry::check_symmetry(bool do_find_prim) {
   print_symmetry();
 
   if (do_find_prim) {
-    int find_prim = spg_find_primitive(cell, scaled_all_positions, all_types, natoms, symprec);
+    int find_prim = spg_find_primitive(t_cell, scaled_all_positions, all_types, natoms, symprec);
     printf("find_prim = %d, ", find_prim);
     printf("prim_cell = ");
     for (int j = 0; j < 3; ++j) {
       for (int k = 0; k < 3; ++k) {
-        prim_cell[k][j] = cell[j][k]; //transposed
+        prim_cell[k][j] = t_cell[j][k]; //transposed
       }
     }
     printf("\n");

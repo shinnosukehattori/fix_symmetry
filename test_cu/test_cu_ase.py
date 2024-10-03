@@ -17,7 +17,7 @@ calc_eam = EAM(potential=eam_potential_file, elements=['Cu'])
 
 lat = 7.04
 cu4 = Atoms(symbols=['Cu']*4, positions=[(0, 0, 0), (1.76, 1.76, 0.55), (1.76, 0, 1.76), (0, 1.76, 1.76)], pbc=True)
-cu4.cell = [[lat, 0, 0], [0, lat, 0], [0, 0, lat]]
+cu4.cell = [[lat, 0, 0], [0, lat, 0], [0, 2, lat]]
 # Generate bulk structure of Cu
 #a0 = 3.615  # Actual lattice constant of Cu (Å)
 a0 = 3.75  # Actual lattice constant of Cu (Å)
@@ -82,6 +82,6 @@ def optimize_with_fix_symmetry(atoms, calc,
     #print(f"Optimization log is saved in '{logfile}'.")
 
 if __name__ == '__main__':
-    #optimize_with_fix_symmetry(cu4, calc_eam)
-    optimize_with_fix_symmetry(cubulk, calc_eam)
+    optimize_with_fix_symmetry(cu4, calc_eam)
+    #optimize_with_fix_symmetry(cubulk, calc_eam)
 

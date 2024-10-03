@@ -7,7 +7,7 @@ atom_style      atomic
 
 # Define a simple FCC lattice
 lattice         fcc 3.75
-region          box block 0 1 0 1 0 1 units lattice
+region          box block 0 2 0 2 0 2 units lattice
 create_box      1 box
 create_atoms    1 box
 change_box all x scale 1.1 y scale 1.1 z scale 1.1 units box
@@ -19,13 +19,13 @@ mass            1 63.546  # Mass of Copper
 pair_style      eam
 pair_coeff      * * Cu_u3.eam
 
-dump            mydump all custom 1 dump.symmetry_test.lammpstrj id type x y z fx fy fz element
-dump_modify     mydump every 1 element Cu flush yes
+dump            mydump all custom 1 dump.symmetry_test.lammpstrj id type xu yu zu fx fy fz element
+dump_modify     mydump every 1 element Cu flush yes sort id
 thermo          1
 
 # Apply FixSymmetry with space group number 225 (Fm-3m)
 # and a tolerance of 1e-5
-fix             sym all symmetry -1 1e-4 false false true
+fix             sym all symmetry -1 1e-4 false false false
 #fix             sym all symmetry 225 1e-5
 
 
@@ -39,5 +39,5 @@ minimize        1e-6 1e-6 20 20
 
 # Run the simulation
 #velocity        all create 300 4928459 dist gaussian
-#run 100
+run 0
 

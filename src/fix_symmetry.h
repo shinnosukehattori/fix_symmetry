@@ -24,14 +24,14 @@ namespace LAMMPS_NS {
 class FixSymmetry : public Fix {
  public:
   FixSymmetry(class LAMMPS *, int, char **);
-  ~FixSymmetry();
-  int setmask();
-  void init();
-  void pre_force(int vflag);
-  void min_pre_force(int vflag);
-  void post_force(int vflag);
-  void min_post_force(int vflag);
-  void post_run(int vflag);
+  ~FixSymmetry() override;
+  int setmask() override;
+  void init() override;
+  void pre_force(int vflag) override;
+  void min_pre_force(int vlag) override;
+  void end_of_step() override;
+  void min_post_force(int vflag) override;
+  void post_run() override;
 
  private:
   int spacegroup_number;
@@ -59,6 +59,7 @@ class FixSymmetry : public Fix {
   bool need_to_update_symmetry();
   int get_index(std::vector<int> &vec, int val);
   void get_cell(double cell[3][3]);
+  void get_cell_transposed(double cell[3][3]);
   void set_cell(double cell[3][3]);
 
   void adjust_cell(double cell[3][3], double inv_cell[3][3]);
