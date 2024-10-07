@@ -39,7 +39,7 @@ thermo_style custom step temp vol press etotal pe ke epair ecoul elong evdwl ebo
 thermo_modify lost ignore flush yes
 
 
-fix 1 all symmetry 1e-4  true false true true true 
+fix 1 all symmetry 1e-4  false false true true true 
 fix 2 all box/relax tri 0.001 vmax 0.0008
 
 dump            mydump all custom 1 dump.symmetry_test.lammpstrj id type xu yu zu fx fy fz element

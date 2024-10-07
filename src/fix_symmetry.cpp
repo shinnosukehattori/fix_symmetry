@@ -20,14 +20,14 @@ using namespace LAMMPS_NS;
 
 
 FixSymmetry::FixSymmetry(LAMMPS *lmp, int narg, char **arg) : Fix(lmp, narg, arg) {
-  if (narg < 4 || narg > 9)
-    error->all(FLERR, "Illegal fix symmetry command. Must specify space group number and optionals, symprec, symforce,  symstress and debug-mode.");
+  if (narg < 3 || narg > 9)
+    error->all(FLERR, "Illegal fix symmetry command. optional symprec, symcell, symforce, symstress and debug-mode.");
 
   // Get the tolerance (if not specified, set default value)
   if (narg >= 4) {
     symprec = utils::numeric(FLERR, arg[3], false, lmp);
   } else {
-    symprec = 1e-5;  // Default tolerance
+    symprec = 1e-4;  // Default tolerance
   }
   if (narg >= 5) {
     symcell = utils::logical(FLERR, arg[4], false, lmp);
@@ -42,12 +42,12 @@ FixSymmetry::FixSymmetry(LAMMPS *lmp, int narg, char **arg) : Fix(lmp, narg, arg
   if (narg >= 7) {
     symforce = utils::logical(FLERR, arg[6], false, lmp);
   } else {
-    symforce = false;
+    symforce = true;
   }
   if (narg >= 8) {
     symstress = utils::logical(FLERR, arg[7], false, lmp);
   } else {
-    symstress = false;
+    symstress = true;
   }
   if (narg >= 9) {
     debug = utils::logical(FLERR, arg[8], false, lmp);
@@ -103,9 +103,9 @@ void FixSymmetry::init() {
 
 
 void FixSymmetry::setup_pre_force(int vflag) {
-  save_prev_position();
-  adjust_forces();
-  adjust_stress();
+  if(symposs) save_prev_position();
+  if(symforce) adjust_forces();
+  if(symstress) adjust_stress();
 }
 
 void FixSymmetry::end_of_step() {
@@ -116,7 +116,7 @@ void FixSymmetry::end_of_step() {
   if(symforce) adjust_forces();
   if(symstress) adjust_stress();
 
-  save_prev_position();
+  if(symposs) save_prev_position();
 }
 
 void FixSymmetry::min_post_force(int vflag) {
@@ -125,7 +125,7 @@ void FixSymmetry::min_post_force(int vflag) {
 
 void FixSymmetry::post_run() {
   printf("post run ***CHECK SYMMETRY***\n");
-  save_all_coordinates();
+  store_all_coordinates();
   check_symmetry(false);
 }
 
@@ -183,14 +183,6 @@ void FixSymmetry::save_prev_position() {
     prev_positions[i][1] = atom->x[i][1];
     prev_positions[i][2] = atom->x[i][2];
   }
-  double cell[3][3];
-  get_cell(cell);
-  for (int i = 0; i < 3; i++) {
-      for (int j = 0; j < 3; j++) {
-          sym_cell[i][j] = cell[i][j];
-      }
-  }
-  MathExtra::invert3(sym_cell, inv_sym_cell);
 }
 
 void FixSymmetry::adjust_cell() {
@@ -237,11 +229,13 @@ void FixSymmetry::adjust_cell() {
     for (int i = 0; i < 3; i++) {
       for (int j = 0; j < 3; j++) {
         printf("%5.3f[SYM]%5.3f,d=(%5.3f),", sym_cell[i][j], cell[i][j], delta_deform_grad[i][j]);
+        sym_cell[i][j] = cell[i][j];
       }
     }
     printf("\n");
   }
   set_cell(cell);
+  MathExtra::invert3(sym_cell, inv_sym_cell);
 }
 
 void FixSymmetry::adjust_positions() {
@@ -322,7 +316,7 @@ void FixSymmetry::print_symmetry() {
 
 void FixSymmetry::refine_symmetry() {
   //check_and_symmetrize_cell
-  save_all_coordinates();
+  store_all_coordinates();
   check_symmetry(false);
   symmetrize_cell();
   //check_and_symmetrize_positions
@@ -431,7 +425,7 @@ void FixSymmetry::symmetrize_positions() {
   memory->destroy(rot_std_pos);
 }
 
-void FixSymmetry::save_all_coordinates() {
+void FixSymmetry::store_all_coordinates() {
   // Prepare data structures for spglib
   int natoms = atom->natoms;  // Total number of atoms
 
@@ -441,7 +435,7 @@ void FixSymmetry::save_all_coordinates() {
   int *type = atom->type;
   double **x = atom->x;
 
-  printf("natoms = %d, nlocal = %d\n", natoms, nlocal);
+  printf("Store coordinates: :natoms = %d, nlocal = %d\n", natoms, nlocal);
   if (all_positions) memory->destroy(all_positions);
   if (all_types) memory->destroy(all_types);
 

@@ -73,7 +73,7 @@ class FixSymmetry : public Fix {
   void symmetrize_cell();
   void symmetrize_positions();
 
-  void save_all_coordinates();
+  void store_all_coordinates();
   void prep_symmetry();
   void check_symmetry(bool do_find_prim);
 
