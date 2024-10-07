@@ -39,15 +39,15 @@ thermo_style custom step temp vol press etotal pe ke epair ecoul elong evdwl ebo
 thermo_modify lost ignore flush yes
 
 
-fix 1 all symmetry 1e-4  true false false true true 
-fix 2 all box/relax aniso 0.01 vmax 0.001
+fix 1 all symmetry 1e-4  true false true true true 
+fix 2 all box/relax tri 0.001 vmax 0.0008
 
 dump            mydump all custom 1 dump.symmetry_test.lammpstrj id type xu yu zu fx fy fz element
 dump_modify     mydump every 1 element C C O O C O H H H flush yes sort id
 thermo          1
 
 #min_style       cg
-minimize 1e-6 1e-6 5000 5000
+minimize 1e-6 1e-6 500 500
 #fix 3 all nve
 #run 10
 
