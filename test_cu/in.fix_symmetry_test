@@ -6,12 +6,12 @@ boundary        p p p
 atom_style      atomic
 
 # Define a simple FCC lattice
-lattice         fcc 3.75
-region          box block 0 2 0 2 0 2 units lattice
-create_box      1 box
-create_atoms    1 box
-change_box all x scale 1.1 y scale 1.1 z scale 1.1 units box
-#read_data       cu.dat
+#lattice         fcc 3.75
+#region          box block 0 2 0 2 0 2 units lattice
+#create_box      1 box
+#create_atoms    1 box
+read_data       cu32.dat
+change_box all x scale 1.1 y scale 1.1 z scale 1.1
 
 mass            1 63.546  # Mass of Copper
 
@@ -20,24 +20,26 @@ pair_style      eam
 pair_coeff      * * Cu_u3.eam
 
 dump            mydump all custom 1 dump.symmetry_test.lammpstrj id type xu yu zu fx fy fz element
-dump_modify     mydump every 1 element Cu flush yes sort id
+dump_modify     mydump element Cu  sort id
 thermo          1
+thermo_style custom step temp vol press etotal pe ke cella cellb cellc cellalpha cellbeta cellgamma density pxx pyy pzz pxy pxy pyz
 
 # Apply FixSymmetry with space group number 225 (Fm-3m)
 # and a tolerance of 1e-5
-fix             sym all symmetry -1 1e-4 false false false
-#fix             sym all symmetry 225 1e-5
+#fix             sym all symmetry 1e-4 true true true true true
+fix             sym all symmetry 1e-5 true true false true true
 
 
 # Set up minimization
 min_style       cg
-#fix            2 all box/relax iso 0.01 vmax 0.001
-minimize        1e-6 1e-6 20 20
+fix            2 all box/relax iso 0.0001 vmax 0.001
+#fix            2 all box/relax tri 0.0001 vmax 0.002
+minimize        1e-7 0 500 500
 
 #unfix           2
-#fix             1 all npt temp 300 300 0.1 iso 0.0 0.0 1.0
 
 # Run the simulation
 #velocity        all create 300 4928459 dist gaussian
-run 0
+#fix             1 all npt temp 300 300 0.1 iso 0.0 0.0 1.0
+#run 10
 

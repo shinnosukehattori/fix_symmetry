@@ -10,7 +10,7 @@ angle_style hybrid harmonic
 dihedral_style hybrid charmm
 # special_bonds amber # same as special_bonds lj 0.0 0.0 0.5000 coul 0.0 0.0 0.83333
 special_bonds amber lj 0.0 0.0 0.50000 coul 0.0 0.0 0.83333 angle yes dihedral no
-box tilt large
+#box tilt large
 
 read_data lmp.dat
 
@@ -34,16 +34,20 @@ pair_coeff 8 8   0.0150000   2.5996425
 pair_coeff 9 9   0.0000000  10.0000000
 
 #pair_modify mix arithmetic
-thermo_style custom step temp vol press etotal pe ke epair ecoul elong evdwl ebond eangle edihed eimp emol etail #    cella cellb cellc cellalpha cellbeta cellgamma density pxx pyy pzz pxy pxy pyz
+thermo_style custom step temp vol press etotal pe ke epair ecoul elong evdwl ebond eangle edihed eimp emol etail cella cellb cellc cellalpha cellbeta cellgamma density pxx pyy pzz pxy pxy pyz
+#thermo_style custom step temp vol press etotal pe ke epair ecoul elong evdwl ebond eangle edihed eimp emol etail #    cella cellb cellc cellalpha cellbeta cellgamma density pxx pyy pzz pxy pxy pyz
 thermo_modify lost ignore flush yes
 
 
-fix 1 all symmetry -1 1e-4   
+fix 1 all symmetry 1e-4  true false false true true 
+fix 2 all box/relax aniso 0.01 vmax 0.001
 
 dump            mydump all custom 1 dump.symmetry_test.lammpstrj id type xu yu zu fx fy fz element
-dump_modify     mydump every 10 element C C O O C O H H H flush yes sort id
-thermo          10
+dump_modify     mydump every 1 element C C O O C O H H H flush yes sort id
+thermo          1
 
-minimize 1e-6 1e-6 500 500
-#run 0
+#min_style       cg
+minimize 1e-6 1e-6 5000 5000
+#fix 3 all nve
+#run 10
 

@@ -1,6 +1,7 @@
 import os
 from ase import Atoms
 from ase.build import bulk
+from ase.io import read
 from ase.calculators.eam import EAM
 from ase.constraints import FixSymmetry
 from ase.optimize import LBFGS
@@ -15,14 +16,17 @@ if not os.path.isfile(eam_potential_file):
 
 calc_eam = EAM(potential=eam_potential_file, elements=['Cu'])
 
-lat = 7.04
-cu4 = Atoms(symbols=['Cu']*4, positions=[(0, 0, 0), (1.76, 1.76, 0.55), (1.76, 0, 1.76), (0, 1.76, 1.76)], pbc=True)
-cu4.cell = [[lat, 0, 0], [0, lat, 0], [0, 2, lat]]
+lat = 10.0
+cu4 = Atoms(symbols=['Cu']*4, positions=[(0, 0, 0), (3.00, 0.0, 0.0), (0, 5, 5.0), (5.0, 5.0, 0.0)], pbc=True)
+#cu4 = Atoms(symbols=['Cu']*4, positions=[(0, 0, 0), (0.76, 1.76, 0.55), (1.76, 0, 1.76), (0, 15.0, 15.0)], pbc=True)
+cu4.cell = [[lat, 0, 0], [0, lat, 0], [-2, 0, lat]]
 # Generate bulk structure of Cu
 #a0 = 3.615  # Actual lattice constant of Cu (Å)
-a0 = 3.75  # Actual lattice constant of Cu (Å)
-cubulk = bulk('Cu', 'fcc', a=a0, cubic=True)
+#a0 = 3.75  # Actual lattice constant of Cu (Å)
+#cubulk = bulk('Cu', 'fcc', a=a0, cubic=True)
 #cubulk = cubulk.repeat([2, 2, 2])
+cubulk = read('cu32.dat', format='lammps-data')
+cubulk.symbols = ['Cu']*32
 print(cubulk.cell.cellpar())
 cubulk.cell *= 1.1
 # -------------------------------
@@ -82,6 +86,6 @@ def optimize_with_fix_symmetry(atoms, calc,
     #print(f"Optimization log is saved in '{logfile}'.")
 
 if __name__ == '__main__':
-    optimize_with_fix_symmetry(cu4, calc_eam)
-    #optimize_with_fix_symmetry(cubulk, calc_eam)
+    #optimize_with_fix_symmetry(cu4, calc_eam)
+    optimize_with_fix_symmetry(cubulk, calc_eam)
 
