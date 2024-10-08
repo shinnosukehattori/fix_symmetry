@@ -15,11 +15,22 @@
 #include "math_extra.h"
 #include <cmath>
 #include <iostream>
+#include <sstream>
 
 using namespace LAMMPS_NS;
 
 
 FixSymmetry::FixSymmetry(LAMMPS *lmp, int narg, char **arg) : Fix(lmp, narg, arg) {
+
+  int proc_x = comm->procgrid[0];
+  int proc_y = comm->procgrid[1];
+  int proc_z = comm->procgrid[2];
+
+  if (proc_x >= 2 || proc_y >= 2 || proc_z >= 2) {
+    error->all(FLERR, "Processor grid size in any direction must be less than 2 for fix symmetry.");
+  }
+
+
   if (narg < 3 || narg > 9)
     error->all(FLERR, "Illegal fix symmetry command. optional symprec, symcell, symforce, symstress and debug-mode.");
 
@@ -124,7 +135,7 @@ void FixSymmetry::min_post_force(int vflag) {
 }
 
 void FixSymmetry::post_run() {
-  printf("post run ***CHECK SYMMETRY***\n");
+  utils::logmesg(lmp, "post run ***CHECK SYMMETRY***\n");
   store_all_coordinates();
   check_symmetry(false);
 }
@@ -211,7 +222,8 @@ void FixSymmetry::adjust_cell() {
   if (max_delta_grad > 0.25){
     error->all(FLERR, "Too large deformation gradient in FixSymmetry::adjust_cell");
   } else if (max_delta_grad > 1.0) {
-    printf("Warning! max_delta_grad = %f\n", max_delta_grad);
+    std::string message = fmt::format("Warning! max_delta_grad = %f\n", max_delta_grad);
+    utils::logmesg(lmp, message);
   }
 
   symmetrize_rank2(delta_deform_grad);
@@ -225,14 +237,15 @@ void FixSymmetry::adjust_cell() {
   MathExtra::transpose_times3(sym_cell, delta_deform_grad0, cell);
 
   if (debug) {
-    printf("Symmetrized Cell Matrix (adj) = ");
+    utils::logmesg(lmp, "Symmetrized Cell Matrix (adj) = ");
     for (int i = 0; i < 3; i++) {
       for (int j = 0; j < 3; j++) {
-        printf("%5.3f[SYM]%5.3f,d=(%5.3f),", sym_cell[i][j], cell[i][j], delta_deform_grad[i][j]);
+        std::string message = fmt::format("%5.3f[SYM]%5.3f,d=(%5.3f),", sym_cell[i][j], cell[i][j], delta_deform_grad[i][j]);
+        utils::logmesg(lmp, message);
         sym_cell[i][j] = cell[i][j];
       }
     }
-    printf("\n");
+    utils::logmesg(lmp, "\n");
   }
   set_cell(cell);
   MathExtra::invert3(sym_cell, inv_sym_cell);
@@ -307,11 +320,13 @@ void FixSymmetry::adjust_stress() {
 }
 
 void FixSymmetry::print_symmetry() {
-  std::cout << "Precision: " << symprec
+  std::ostringstream message;
+  message  << "Precision: " << symprec
             << ", Space group number: " << dataset->spacegroup_number
             << ", Sym N operations: " << dataset->spacegroup_number
             << ", International symbol: " << dataset->n_operations
             << ", Hall symbol: " << dataset->hall_symbol << std::endl;
+  utils::logmesg(lmp, message.str());
 }
 
 void FixSymmetry::refine_symmetry() {
@@ -336,13 +351,14 @@ void FixSymmetry::symmetrize_cell() {
   MathExtra::invert3(sym_cell, inv_sym_cell);
 
   //dump cell matrix
-  printf("Symmetrized Cell Matrix = ");
+  utils::logmesg(lmp, "Symmetrized Cell Matrix = ");
   for (int i = 0; i < 3; i++) {
     for (int j = 0; j < 3; j++) {
-      printf("%f,", sym_cell[i][j]);
+      std::string message = fmt::format("%f,", sym_cell[i][j]);
+      utils::logmesg(lmp, message);
     }
   }
-  printf("\n");
+  utils::logmesg(lmp, "\n");
 
   set_cell(sym_cell);
 }
@@ -435,7 +451,7 @@ void FixSymmetry::store_all_coordinates() {
   int *type = atom->type;
   double **x = atom->x;
 
-  printf("Store coordinates: :natoms = %d, nlocal = %d\n", natoms, nlocal);
+  if (debug) printf("Store coordinates: :natoms = %d, nlocal = %d\n", natoms, nlocal);
   if (all_positions) memory->destroy(all_positions);
   if (all_types) memory->destroy(all_types);
 
@@ -482,13 +498,11 @@ void FixSymmetry::check_symmetry(bool do_find_prim) {
 
   if (do_find_prim) {
     int find_prim = spg_find_primitive(t_cell, (double (*)[3])all_positions, all_types, natoms, symprec);
-    printf("find_prim = %d, ", find_prim);
     for (int j = 0; j < 3; j++) {
       for (int k = 0; k < 3; k++) {
         prim_cell[k][j] = t_cell[j][k]; //transposed
       }
     }
-    printf("\n");
 
     // Atom mapping for primmitive
     mapping_to_primitive.clear();
@@ -526,7 +540,6 @@ void FixSymmetry::prep_symmetry() {
 
   domain->x2lamda(atom->nlocal);
 
-  printf("nsym = %d\n", nsym);
   for (int i = 0; i < nsym; i++) {
     double R[3][3];
     double t[3];

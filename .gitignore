@@ -1,0 +1,14 @@
+test_pyocse/Minimize_*
+test.db
+loginfo
+pyxtal.prm
+pyxtal.rtf
+dump.*
+log.lammps
+Cu_u3.eam
+cu*.dat
+lmp
+*.log
+parameters.xml
+*.cif
+dball.txt

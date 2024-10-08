@@ -1,6 +1,6 @@
 import os
 from ase import Atoms
-from ase.build import bulk
+#from ase.build import bulk
 from ase.io import read
 from ase.calculators.eam import EAM
 from ase.constraints import FixSymmetry
