@@ -1,5 +1,5 @@
 #smiles: CC(=O)OC1=CC=CC=C1C(=O)O
-log lmp.log
+log lmp_box.log
 units real
 atom_style full
 
@@ -46,15 +46,14 @@ dump            mydump all custom 1 dump.symmetry_test.lammpstrj id type xu yu z
 dump_modify     mydump every 1 element C C O O C O H H H flush yes sort id
 thermo          1
 
-fix 1 all symmetry 5e-5 true false true true true 
-#fix 1 all symmetry 6e-5 true true true true true 
-#fix 1 all symmetry 6e-5 false true false false true 
-min_style       cg
-minimize 1e-5 0 20 20
+min_style      cg
+fix 2 all symmetry 5e-5 false false true true true
+minimize 1e-5 1e-5 20 20
 
-fix 2 all box/relax aniso 0.001 vmax 0.002
+unfix 2
+fix 2 all box/relax/symmetry aniso 0.0001 vmax 0.002 symprec 5e-5
 minimize 0 1e-5 500 500
 
 unfix 2
-fix 2 all box/relax tri 0.001 vmax 0.0003
+fix 2 all box/relax/symmetry tri 0.0001 vmax 0.0003 symprec 8e-5 
 minimize 1e-6 1e-6 500 500

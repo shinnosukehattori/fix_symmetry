@@ -130,12 +130,12 @@ void FixBoxRelaxSymmetry::setup_pre_force(int vflag) {
 double FixBoxRelaxSymmetry::min_energy(double *fextra) {
   double cell[3][3];
 
+  //adjust_positions();
   adjust_forces();
   adjust_stress();
 
   double energy = FixBoxRelax::min_energy(fextra);
   adjust_cell();
-  adjust_positions();
 
   return energy;
 }
