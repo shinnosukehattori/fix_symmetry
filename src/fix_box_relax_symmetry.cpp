@@ -4,7 +4,7 @@
   *  Created on: 2024/09/29 shattori
 */
 
-#include "fix_symmetry.h"
+#include "fix_box_relax_symmetry.h"
 
 #include "atom.h"
 #include "domain.h"
@@ -20,50 +20,59 @@
 using namespace LAMMPS_NS;
 
 
-FixSymmetry::FixSymmetry(LAMMPS *lmp, int narg, char **arg) : Fix(lmp, narg, arg) {
+//ARGRemover::ARGRemover(LAMMPS *lmp, int narg, char **arg) :
+// Pointers(lmp)
+ARGRemover::ARGRemover(LAMMPS *lmp, int narg, char **arg) {
+  narg_new = 0;
+  arg_new = nullptr;
+  symprec = 1e-4;
+  debug = false;
 
-  int proc_x = comm->procgrid[0];
-  int proc_y = comm->procgrid[1];
-  int proc_z = comm->procgrid[2];
+  //save original arguments and copy and remove the arguments 
+  //that are not needed for the fix
+  for (int iarg = 0; iarg < narg; iarg++) {
+    if (strcmp(arg[iarg],"symprec") == 0) {
+      if (iarg+2 > narg) utils::missing_cmd_args(FLERR, "fix box/relax/symmetry symprec", lmp->error);
+      symprec = utils::numeric(FLERR, arg[iarg+1], false, lmp);
+      iarg++;
+    } else if (strcmp(arg[iarg],"debug") == 0) {
+      if (iarg+2 > narg) utils::missing_cmd_args(FLERR, "fix box/relax/symmetry symprec", lmp->error);
+      debug = utils::logical(FLERR, arg[iarg+1], false, lmp);
+      iarg++;
+    } else {
+      narg_new++;
+    }
+  }
+  if (narg_new > 0) {
+    arg_new  = new char*[narg_new];
+    int j = 0;
+    for (int i = 0; i < narg; i++) {
+      if (strcmp(arg[i], "symprec") == 0 || strcmp(arg[i], "debug") == 0) {
+        i++;
+      } else {
+        arg_new[j] = strdup(arg[i]);
+        j++;
+      }
+    }
+  }
+}
 
-  if (proc_x >= 2 || proc_y >= 2 || proc_z >= 2) {
+ARGRemover::~ARGRemover() {
+  if (arg_new != nullptr){
+    for (int i = 0; i < narg_new; i++) {
+      if (arg_new[i] != nullptr) {
+        delete[] arg_new[i];
+      }
+    }
+    delete[] arg_new;
+  }
+}
+
+FixBoxRelaxSymmetry::FixBoxRelaxSymmetry(LAMMPS *lmp, int narg, char **arg) : ARGRemover(lmp, narg, arg), FixBoxRelax(lmp, narg_new, arg_new)
+{
+
+  if (comm->procgrid[0] >= 2 || comm->procgrid[1] >= 2 || comm->procgrid[2] >= 2) {
     error->all(FLERR, "Processor grid size in any direction must be less than 2 for fix symmetry.");
-  }
-
-
-  if (narg < 3 || narg > 9)
-    error->all(FLERR, "Illegal fix symmetry command. optional symprec, symcell, symforce, symstress and debug-mode.");
-
-  // Get the tolerance (if not specified, set default value)
-  if (narg >= 4) {
-    symprec = utils::numeric(FLERR, arg[3], false, lmp);
-  } else {
-    symprec = 1e-4;  // Default tolerance
-  }
-  if (narg >= 5) {
-    symcell = utils::logical(FLERR, arg[4], false, lmp);
-  } else {
-    symcell = false;
-  }
-  if (narg >= 6) {
-    symposs= utils::logical(FLERR, arg[5], false, lmp);
-  } else {
-    symposs = false;
-  }
-  if (narg >= 7) {
-    symforce = utils::logical(FLERR, arg[6], false, lmp);
-  } else {
-    symforce = true;
-  }
-  if (narg >= 8) {
-    symstress = utils::logical(FLERR, arg[7], false, lmp);
-  } else {
-    symstress = true;
-  }
-  if (narg >= 9) {
-    debug = utils::logical(FLERR, arg[8], false, lmp);
-  } else {
-    debug = false;
   }
 
   for (int i = 0; i < 3; i++) {
@@ -84,7 +93,7 @@ FixSymmetry::FixSymmetry(LAMMPS *lmp, int narg, char **arg) : Fix(lmp, narg, arg
   dataset = nullptr;
 }
 
-FixSymmetry::~FixSymmetry() {
+FixBoxRelaxSymmetry::~FixBoxRelaxSymmetry() {
   // Free memory
   memory->destroy(prev_positions);
   memory->destroy(all_positions);
@@ -96,50 +105,48 @@ FixSymmetry::~FixSymmetry() {
   }
 }
 
-int FixSymmetry::setmask() {
+int FixBoxRelaxSymmetry::setmask() {
   int mask = 0;
-  mask |= FixConst::PRE_FORCE;
   mask |= FixConst::MIN_PRE_FORCE;
-  mask |= FixConst::END_OF_STEP;
-  mask |= FixConst::MIN_POST_FORCE;
   mask |= FixConst::POST_RUN;
+  mask |= FixConst::MIN_ENERGY;
   return mask;
 }
 
-void FixSymmetry::init() {
+void FixBoxRelaxSymmetry::init() {
   refine_symmetry();
   prep_symmetry();
+
+  FixBoxRelax::init();
 }
 
 
-void FixSymmetry::setup_pre_force(int vflag) {
-  if(symposs) save_prev_position();
-  if(symforce) adjust_forces();
-  if(symstress) adjust_stress();
+void FixBoxRelaxSymmetry::setup_pre_force(int vflag) {
+  save_prev_position();
+  adjust_forces();
+  adjust_stress();
 }
 
-void FixSymmetry::end_of_step() {
+double FixBoxRelaxSymmetry::min_energy(double *fextra) {
   double cell[3][3];
 
-  if(symposs) adjust_positions();
-  if(symforce) adjust_forces();
-  if(symstress) adjust_stress();
-  if(symcell) adjust_cell();
+  adjust_forces();
+  adjust_stress();
 
-  if(symposs) save_prev_position();
+  double energy = FixBoxRelax::min_energy(fextra);
+  adjust_cell();
+  adjust_positions();
+
+  return energy;
 }
 
-void FixSymmetry::min_post_force(int vflag) {
-  end_of_step();
-}
 
-void FixSymmetry::post_run() {
-  utils::logmesg(lmp, "post run ***CHECK SYMMETRY***\n");
+void FixBoxRelaxSymmetry::post_run() {
   store_all_coordinates();
   check_symmetry(false);
 }
 
-int FixSymmetry::get_index(std::vector<int> &vec, int val) {
+int FixBoxRelaxSymmetry::get_index(std::vector<int> &vec, int val) {
   for (int i = 0; i < vec.size(); i++) {
     if (vec[i] == val) {
       return i;
@@ -148,7 +155,7 @@ int FixSymmetry::get_index(std::vector<int> &vec, int val) {
   return -1;
 }
 
-void FixSymmetry::get_cell(double cell[3][3]) {
+void FixBoxRelaxSymmetry::get_cell(double cell[3][3]) {
   cell[0][1] = cell[0][2] = cell[1][2] = 0.0;
   cell[0][0] = domain->h[0];
   cell[1][1] = domain->h[1];
@@ -162,7 +169,7 @@ void FixSymmetry::get_cell(double cell[3][3]) {
   }
 }
 
-void FixSymmetry::set_cell(double cell[3][3]) {
+void FixBoxRelaxSymmetry::set_cell(double cell[3][3]) {
 
   // Update cell matrix
   domain->boxlo[0] = domain->boxlo[1] = domain->boxlo[2] = 0.0;
@@ -180,13 +187,13 @@ void FixSymmetry::set_cell(double cell[3][3]) {
   domain->set_local_box();
 }
 
-void FixSymmetry::save_prev_position() {
+void FixBoxRelaxSymmetry::save_prev_position() {
 
   if (prev_positions != nullptr || 3*atom->nlocal != sizeof(prev_positions)) {
     memory->destroy(prev_positions);
   }
   if (prev_positions == nullptr) {
-    memory->create(prev_positions, atom->nlocal, 3, "fix_symmetry:prev_positions");
+    memory->create(prev_positions, atom->nlocal, 3, "fix_box_relax_symmetry:prev_positions");
   }
   for (int i = 0; i < atom->nlocal; i++) {
     prev_positions[i][0] = atom->x[i][0];
@@ -195,7 +202,7 @@ void FixSymmetry::save_prev_position() {
   }
 }
 
-void FixSymmetry::adjust_cell() {
+void FixBoxRelaxSymmetry::adjust_cell() {
 
   double cell[3][3];
 
@@ -219,7 +226,7 @@ void FixSymmetry::adjust_cell() {
     }
   }
   if (max_delta_grad > 0.25){
-    error->all(FLERR, "Too large deformation gradient in FixSymmetry::adjust_cell");
+    error->all(FLERR, "Too large deformation gradient in FixBoxRelaxSymmetry::adjust_cell");
   } else if (max_delta_grad > 1.0) {
     std::string message = fmt::format("Warning! max_delta_grad = {:f}\n", max_delta_grad);
     utils::logmesg(lmp, message);
@@ -250,7 +257,7 @@ void FixSymmetry::adjust_cell() {
   MathExtra::invert3(sym_cell, inv_sym_cell);
 }
 
-void FixSymmetry::adjust_positions() {
+void FixBoxRelaxSymmetry::adjust_positions() {
   double **x = atom->x;
   int nlocal = atom->nlocal;
 
@@ -272,7 +279,7 @@ void FixSymmetry::adjust_positions() {
   }
 }
 
-void FixSymmetry::adjust_forces() {
+void FixBoxRelaxSymmetry::adjust_forces() {
   double **f = atom->f;
   int nlocal = atom->nlocal;
 
@@ -295,7 +302,7 @@ void FixSymmetry::adjust_forces() {
   }
 }
 
-void FixSymmetry::adjust_stress() {
+void FixBoxRelaxSymmetry::adjust_stress() {
   // Get global stress tensor
   double *stress = virial;
   double stress_tensor[3][3];
@@ -318,17 +325,17 @@ void FixSymmetry::adjust_stress() {
   stress[5] = stress_tensor[0][1];
 }
 
-void FixSymmetry::print_symmetry() {
+void FixBoxRelaxSymmetry::print_symmetry() {
   std::ostringstream message;
-  message  << "Precision: " << symprec
-            << ", Space group number: " << dataset->spacegroup_number
-            << ", Sym N operations: " << dataset->spacegroup_number
-            << ", International symbol: " << dataset->n_operations
+  message  << "[Sym] Prec.: " << symprec
+            << ", SG number: " << dataset->spacegroup_number
+            << ", Sym N ops: " << dataset->spacegroup_number
+            << ", Int. symbol: " << dataset->n_operations
             << ", Hall symbol: " << dataset->hall_symbol << std::endl;
-  utils::logmesg(lmp, message.str());
+  if(comm->me == 0) utils::logmesg(lmp, message.str());
 }
 
-void FixSymmetry::refine_symmetry() {
+void FixBoxRelaxSymmetry::refine_symmetry() {
   //check_and_symmetrize_cell
   store_all_coordinates();
   check_symmetry(false);
@@ -341,7 +348,7 @@ void FixSymmetry::refine_symmetry() {
   return;
 }
 
-void FixSymmetry::symmetrize_cell() {
+void FixBoxRelaxSymmetry::symmetrize_cell() {
 
   // Get standard cell matrix
   double trans_std_cell[3][3];
@@ -364,7 +371,7 @@ void FixSymmetry::symmetrize_cell() {
   set_cell(sym_cell);
 }
 
-void FixSymmetry::symmetrize_positions() {
+void FixBoxRelaxSymmetry::symmetrize_positions() {
   double **x = atom->x;
   int nlocal = atom->nlocal;
 
@@ -387,7 +394,7 @@ void FixSymmetry::symmetrize_positions() {
   int n_std = dataset->n_std_atoms;
   double **rot_std_pos;
 
-  memory->create(rot_std_pos, n_std, 3, "fix_symmetry:rot_std_pos");
+  memory->create(rot_std_pos, n_std, 3, "fix_box_relax_symmetry:rot_std_pos");
 
   for (int i=0; i < n_std; i++) {
     MathExtra::transpose_matvec(rot_std_cell, dataset->std_positions[i], rot_std_pos[i]);
@@ -442,7 +449,7 @@ void FixSymmetry::symmetrize_positions() {
   memory->destroy(rot_std_pos);
 }
 
-void FixSymmetry::store_all_coordinates() {
+void FixBoxRelaxSymmetry::store_all_coordinates() {
   // Prepare data structures for spglib
   int natoms = atom->natoms;  // Total number of atoms
 
@@ -452,12 +459,12 @@ void FixSymmetry::store_all_coordinates() {
   int *type = atom->type;
   double **x = atom->x;
 
-  if (debug) printf("Store coordinates: :natoms = %d, nlocal = %d\n", natoms, nlocal);
+  if (debug) printf("Store all coordinates: :natoms = %d, nlocal = %d\n", natoms, nlocal);
   if (all_positions) delete [] all_positions;
   if (all_types) memory->destroy(all_types);
 
   all_positions  = new double[natoms*3];
-  memory->create(all_types, natoms, "fix_symmetry:all_types");
+  memory->create(all_types, natoms, "fix_box_relax_symmetry:all_types");
 
   for (int i = 0; i < natoms; i++) {
     all_positions[3*i] = 0.0;
@@ -482,7 +489,7 @@ void FixSymmetry::store_all_coordinates() {
   //MPI_Allreduce(MPI_IN_PLACE, all_types, natoms, MPI_INT, MPI_SUM, world);
 }
 
-void FixSymmetry::check_symmetry(bool do_find_prim) {
+void FixBoxRelaxSymmetry::check_symmetry(bool do_find_prim) {
 
   int natoms = atom->natoms;
 
@@ -490,6 +497,8 @@ void FixSymmetry::check_symmetry(bool do_find_prim) {
   double t_cell[3][3];
   get_cell(cell);
   MathExtra::transpose3(cell, t_cell);
+
+  if (dataset) spg_free_dataset(dataset);
   dataset = spg_get_dataset(t_cell, (const double (*)[3])all_positions, all_types, natoms, symprec);
 
   if (dataset == nullptr) {
@@ -523,14 +532,14 @@ void FixSymmetry::check_symmetry(bool do_find_prim) {
 }
 
 
-void FixSymmetry::prep_symmetry() {
+void FixBoxRelaxSymmetry::prep_symmetry() {
   // Get symmetry operations
   int natoms = atom->natoms;
   int nsym = dataset->n_operations;
   if (rotation_matrices) memory->destroy(rotation_matrices);
   if (translation_vectors) memory->destroy(translation_vectors);
-  memory->create(rotation_matrices, nsym, 3, 3, "fix_symmetry:rotation_matrices");
-  memory->create(translation_vectors, nsym, 3, "fix_symmetry:translation_vectors");
+  memory->create(rotation_matrices, nsym, 3, 3, "fix_box_relax_symmetry:rotation_matrices");
+  memory->create(translation_vectors, nsym, 3, "fix_box_relax_symmetry:translation_vectors");
   symm_map.clear();
 
 
@@ -579,7 +588,7 @@ void FixSymmetry::prep_symmetry() {
   }
 }
 
-void FixSymmetry::symmetrize_rank1(std::vector<double[3]> &vec) {
+void FixBoxRelaxSymmetry::symmetrize_rank1(std::vector<double[3]> &vec) {
   int nlocal = atom->nlocal;
   int nsym = dataset->n_operations;
 
@@ -637,7 +646,7 @@ void FixSymmetry::symmetrize_rank1(std::vector<double[3]> &vec) {
   }
 }
 
-void FixSymmetry::symmetrize_rank2(double tensor[3][3]) {
+void FixBoxRelaxSymmetry::symmetrize_rank2(double tensor[3][3]) {
   int nlocal = atom->nlocal;
   int nsym = dataset->n_operations;
 

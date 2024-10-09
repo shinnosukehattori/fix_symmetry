@@ -25,6 +25,8 @@ CMAKE_MODULE_PATH="$SPGLIB_LIBRARIES/cmake/Spglib"
 
 cp "src/fix_symmetry.h" "$LAMMPS_DIR/src/"
 cp "src/fix_symmetry.cpp" "$LAMMPS_DIR/src/"
+cp "src/fix_box_relax_symmetry.h" "$LAMMPS_DIR/src/"
+cp "src/fix_box_relax_symmetry.cpp" "$LAMMPS_DIR/src/"
 
 cd $LAMMPS_DIR
 rm -rf $dirname
@@ -37,7 +39,7 @@ echo "Updating CMakeLists.txt to include fix_symmetry.cpp and link spglib..."
 # Check if fix_symmetry.cpp is already included
 if ! grep -q "fix_symmetry.cpp" "../cmake/CMakeLists.txt"; then
   echo "Adding fix_symmetry.cpp to CMakeLists.txt..."
-  echo "set(SOURCE_EXTRA \${SOURCE_EXTRA} fix_symmetry.cpp)" >> "../cmake/CMakeLists.txt"
+  echo "set(SOURCE_EXTRA \${SOURCE_EXTRA} fix_symmetry.cpp:fix_box_relax_symmetry.cpp)" >> "../cmake/CMakeLists.txt"
 fi
 
 # Add spglib include and library directories

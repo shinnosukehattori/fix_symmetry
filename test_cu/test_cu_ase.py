@@ -17,9 +17,9 @@ if not os.path.isfile(eam_potential_file):
 calc_eam = EAM(potential=eam_potential_file, elements=['Cu'])
 
 lat = 10.0
-cu4 = Atoms(symbols=['Cu']*4, positions=[(0, 0, 0), (3.00, 0.0, 0.0), (0, 5, 5.0), (5.0, 5.0, 0.0)], pbc=True)
+cu4 = Atoms(symbols=['Cu']*4, positions=[(0, 0, 0), (2.5, 0.0, 0.0), (2.5, 5.0, 0.0), (5.0, 5.0, 0.0)], pbc=True)
 #cu4 = Atoms(symbols=['Cu']*4, positions=[(0, 0, 0), (0.76, 1.76, 0.55), (1.76, 0, 1.76), (0, 15.0, 15.0)], pbc=True)
-cu4.cell = [[lat, 0, 0], [0, lat, 0], [-2, 0, lat]]
+cu4.cell = [[lat, 0, 0], [0, lat, 0], [0, 0, lat]]
 # Generate bulk structure of Cu
 #a0 = 3.615  # Actual lattice constant of Cu (Å)
 #a0 = 3.75  # Actual lattice constant of Cu (Å)

@@ -6,6 +6,7 @@
 0.0 7.04 xlo xhi
 0.0 7.04 ylo yhi
 0.0 7.04 zlo zhi
+0 -0.2 0 xy xz yz
 
 Atoms  # atomic
 

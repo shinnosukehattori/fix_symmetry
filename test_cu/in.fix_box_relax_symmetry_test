@@ -10,7 +10,6 @@ atom_style      atomic
 #region          box block 0 2 0 2 0 2 units lattice
 #create_box      1 box
 #create_atoms    1 box
-
 read_data       cu32.dat
 change_box all x scale 1.1 y scale 1.1 z scale 1.1
 
@@ -27,20 +26,10 @@ thermo_style custom step temp vol press etotal pe ke cella cellb cellc cellalpha
 
 # Apply FixSymmetry with space group number 215
 # and a tolerance of 1e-5
-#fix             sym all symmetry 1e-4 false false true true true
-fix             sym all symmetry 1e-5 true true true true true
 
 
 # Set up minimization
 min_style       cg
-#fix            2 all box/relax aniso 0.0001 vmax 0.001
-fix            2 all box/relax tri 0.001 vmax 0.002
+#fix            2 all box/relax tri 0.0001 vmax 0.002
+fix             2 all box/relax/symmetry tri 0.001 vmax 0.001 symprec 1e-5 debug true
 minimize        1e-7 0 1000 1000
-
-#unfix           2
-
-# Run the simulation
-#velocity        all create 300 4928459 dist gaussian
-#fix             1 all npt temp 300 300 0.1 iso 0.0 0.0 1.0
-#run 10
-
