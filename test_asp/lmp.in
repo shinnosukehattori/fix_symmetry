@@ -12,6 +12,7 @@ dihedral_style hybrid charmm
 special_bonds amber lj 0.0 0.0 0.50000 coul 0.0 0.0 0.83333 angle yes dihedral no
 #box tilt large
 
+#read_data lmp_ACSALA13.dat
 read_data lmp.dat
 
 neighbor 2.0 multi
@@ -39,15 +40,50 @@ thermo_style custom step temp vol press etotal pe ke epair ecoul elong evdwl ebo
 thermo_modify lost ignore flush yes
 
 
-fix 1 all symmetry 1e-4  false false true true true 
-fix 2 all box/relax tri 0.001 vmax 0.0008
 
 dump            mydump all custom 1 dump.symmetry_test.lammpstrj id type xu yu zu fx fy fz element
 dump_modify     mydump every 1 element C C O O C O H H H flush yes sort id
 thermo          1
 
-#min_style       cg
-minimize 1e-6 1e-6 500 500
-#fix 3 all nve
-#run 10
+fix 1 all symmetry 6e-5 true false true true true 
+#fix 1 all symmetry 6e-5 true true true true true 
+#fix 1 all symmetry 6e-5 false true false false true 
+min_style       sd
+minimize 1e-5 0 10 10
+
+
+fix 2 all box/relax aniso 0.001 vmax 0.005
+minimize 0 1e-5 500 500
+
+#unfix 2 
+#fix 2 all box/relax tri 0.001 vmax 0.005
+#minimize 0 1e-5 500 500
+
+unfix 2 
+fix 2 all box/relax tri 0.001 vmax 0.003
+minimize 0 1e-5 500 500
+
+unfix 2 
+fix 2 all box/relax tri 0.001 vmax 0.005
+minimize 0 1e-5 500 500
+
+unfix 2 
+fix 2 all box/relax tri 0.001 vmax 0.015
+minimize 0 1e-5 500 500
+
+unfix 2 
+fix 2 all box/relax tri 0.001 vmax 0.020
+minimize 0 1e-5 500 500
+
+unfix 2 
+fix 2 all box/relax tri 0.001 vmax 0.020
+minimize 0 1e-5 500 500
+
+fix 3 all nve
+run 100
+
+unfix 2 
+fix 2 all box/relax tri 0.001 vmax 0.010
+minimize 0 1e-5 500 500
+
 

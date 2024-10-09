@@ -8,28 +8,22 @@ if __name__ == "__main__":
     # db = database('../HT-OCSP/benchmarks/Si.db')
     db = database("./test.db")
     style = 'gaff' #'openff'
-    #chargemethod = 'gasteiger'
-    chargemethod = 'am1bcc'
+    chargemethod = 'gasteiger'
+    #chargemethod = 'am1bcc'
     #xtal = db.get_pyxtal("ACSALA")
     codes = db.get_all_codes()
     #codes = ["VOBYAN"]
-    #codes = ["CYANAM01"]
-    skippes = ["TIDFES", "XAFQAZ", "BOQQUT", "BOQQUT01", "UJIRIO01", "UJIRIO05"] #openff.toolkit.utils.exceptions.UndefinedStereochemistryError: Unable to make OFFMol from SMILES: RDMol has unspecified stereochemistry. Undefined chiral centers
-
+    codes = ["AXIDER"]
     for code in codes:
-        if code in skippes:
-            continue
         #workdir
         wdir = "Minimize_LMPSYM_" + code
-        if os.path.exists(wdir):
-            continue
-
         os.makedirs(wdir, exist_ok=True)
         os.chdir(wdir)
         
         xtal = db.get_pyxtal(code)
         if xtal.has_special_site():
             xtal = xtal.to_subgroup()
+
         print(code, xtal.group.number)
         smiles = [mol.smile for mol in xtal.molecules]
         assert smiles[0] is not None
@@ -40,7 +34,7 @@ if __name__ == "__main__":
         lmp_struc.write_lammps()
 
         additional_lmpcmds = """
-fix   sym all symmetry 1e-5
+fix   sym all symmetry 2e-5
 minimize 1e-6 1e-6 10 10
 
 #fix   2 all box/relax aniso 1e-5 vmax 0.0001

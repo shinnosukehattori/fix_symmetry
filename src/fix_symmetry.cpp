@@ -122,10 +122,10 @@ void FixSymmetry::setup_pre_force(int vflag) {
 void FixSymmetry::end_of_step() {
   double cell[3][3];
 
-  if(symcell) adjust_cell();
   if(symposs) adjust_positions();
   if(symforce) adjust_forces();
   if(symstress) adjust_stress();
+  if(symcell) adjust_cell();
 
   if(symposs) save_prev_position();
 }
@@ -222,7 +222,7 @@ void FixSymmetry::adjust_cell() {
   if (max_delta_grad > 0.25){
     error->all(FLERR, "Too large deformation gradient in FixSymmetry::adjust_cell");
   } else if (max_delta_grad > 1.0) {
-    std::string message = fmt::format("Warning! max_delta_grad = %f\n", max_delta_grad);
+    std::string message = fmt::format("Warning! max_delta_grad = {:f}\n", max_delta_grad);
     utils::logmesg(lmp, message);
   }
 
@@ -240,7 +240,7 @@ void FixSymmetry::adjust_cell() {
     utils::logmesg(lmp, "Symmetrized Cell Matrix (adj) = ");
     for (int i = 0; i < 3; i++) {
       for (int j = 0; j < 3; j++) {
-        std::string message = fmt::format("%5.3f[SYM]%5.3f,d=(%5.3f),", sym_cell[i][j], cell[i][j], delta_deform_grad[i][j]);
+        std::string message = fmt::format("{:5.3f}->{:5.3f}, ", sym_cell[i][j], cell[i][j]);
         utils::logmesg(lmp, message);
         sym_cell[i][j] = cell[i][j];
       }
@@ -334,9 +334,11 @@ void FixSymmetry::refine_symmetry() {
   store_all_coordinates();
   check_symmetry(false);
   symmetrize_cell();
-  //check_and_symmetrize_positions
   check_symmetry(true); //use symmetrized cell and find primitive
   symmetrize_positions();
+
+  store_all_coordinates();
+  check_symmetry(false);
   return;
 }
 
@@ -354,7 +356,7 @@ void FixSymmetry::symmetrize_cell() {
   utils::logmesg(lmp, "Symmetrized Cell Matrix = ");
   for (int i = 0; i < 3; i++) {
     for (int j = 0; j < 3; j++) {
-      std::string message = fmt::format("%f,", sym_cell[i][j]);
+      std::string message = fmt::format("{:f},", sym_cell[i][j]);
       utils::logmesg(lmp, message);
     }
   }
@@ -406,7 +408,7 @@ void FixSymmetry::symmetrize_positions() {
     if (debug) {
       int j = mapping_to_primitive[i];
       printf("mapping_to_primitive[%d] = %d\n", i, j);
-      printf("std_mapping_to_primitive[%d] = %d\n", j, std_mapping_to_primitive[j]);
+      printf("std_mapping_to_primitive[%d] = %d\n", j, get_index(std_mapping_to_primitive, j));
     }
 
     int std_i = get_index(std_mapping_to_primitive, mapping_to_primitive[i]);
@@ -420,11 +422,11 @@ void FixSymmetry::symmetrize_positions() {
     dp[1] = rot_std_pos[std_i][1] + dp0[1] - x[i][1];
     dp[2] = rot_std_pos[std_i][2] + dp0[2] - x[i][2];
 
-    MathExtra::matvec(inv_rot_prim_cell, dp, dp_s);
+    MathExtra::transpose_matvec(inv_rot_prim_cell, dp, dp_s);
     dp_sr[0] = std::round(dp_s[0]);
     dp_sr[1] = std::round(dp_s[1]);
     dp_sr[2] = std::round(dp_s[2]);
-    MathExtra::matvec(rot_prim_cell, dp_sr, dp_sr_mul);
+    MathExtra::transpose_matvec(rot_prim_cell, dp_sr, dp_sr_mul);
 
 
     x[i][0] = rot_std_pos[std_i][0] + dp0[0] - dp_sr_mul[0]; 
@@ -452,11 +454,12 @@ void FixSymmetry::store_all_coordinates() {
   double **x = atom->x;
 
   if (debug) printf("Store coordinates: :natoms = %d, nlocal = %d\n", natoms, nlocal);
-  if (all_positions) memory->destroy(all_positions);
+  if (all_positions) delete [] all_positions;
   if (all_types) memory->destroy(all_types);
 
   all_positions  = new double[natoms*3];
   memory->create(all_types, natoms, "fix_symmetry:all_types");
+
   for (int i = 0; i < natoms; i++) {
     all_positions[3*i] = 0.0;
     all_positions[3*i+1] = 0.0;
@@ -507,10 +510,15 @@ void FixSymmetry::check_symmetry(bool do_find_prim) {
     // Atom mapping for primmitive
     mapping_to_primitive.clear();
     std_mapping_to_primitive.clear();
+
     for (int i = 0; i < atom->nlocal; i++) {
       int id = atom->tag[i] - 1;
       mapping_to_primitive.push_back(dataset->mapping_to_primitive[id]);
-      std_mapping_to_primitive.push_back(dataset->std_mapping_to_primitive[id]);
+    }
+
+    int n_std = dataset->n_std_atoms;
+    for (int i = 0; i < n_std; i++) {
+      std_mapping_to_primitive.push_back(dataset->std_mapping_to_primitive[i]);
     }
   }
 }
