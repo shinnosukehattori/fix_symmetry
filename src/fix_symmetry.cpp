@@ -134,7 +134,6 @@ void FixSymmetry::min_post_force(int vflag) {
 }
 
 void FixSymmetry::post_run() {
-  utils::logmesg(lmp, "post run ***CHECK SYMMETRY***\n");
   store_all_coordinates();
   check_symmetry(false);
 }
@@ -320,12 +319,12 @@ void FixSymmetry::adjust_stress() {
 
 void FixSymmetry::print_symmetry() {
   std::ostringstream message;
-  message  << "Precision: " << symprec
-            << ", Space group number: " << dataset->spacegroup_number
-            << ", Sym N operations: " << dataset->spacegroup_number
-            << ", International symbol: " << dataset->n_operations
+  message  << "[Sym] Prec.: " << symprec
+            << ", SG number: " << dataset->spacegroup_number
+            << ", Sym N ops: " << dataset->spacegroup_number
+            << ", Int. symbol: " << dataset->n_operations
             << ", Hall symbol: " << dataset->hall_symbol << std::endl;
-  utils::logmesg(lmp, message.str());
+  if(comm->me == 0) utils::logmesg(lmp, message.str());
 }
 
 void FixSymmetry::refine_symmetry() {

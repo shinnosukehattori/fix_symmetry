@@ -48,8 +48,9 @@ if __name__ == "__main__":
         os.makedirs(wdir, exist_ok=True)
         os.chdir(wdir)
 
+        
         xtal = db.get_pyxtal(code)
-        print(code, xtal.group.number)
+        print(code, xtal.group.number, xtal.has_special_site(), xtal.get_zprime())
 
         # for charmm
         row = db.get_row(code)
@@ -93,12 +94,17 @@ unfix 2
 fix 2 all box/relax/symmetry symprec 5e-5 tri 0.0001 vmax 0.0001
 minimize 1e-6 1e-6 500 500
         """
-        open('lmp.in', 'a').write(additional_lmpcmds)
-        cmd = '../../lmp -in lmp.in -log lmp.log > /dev/null'
+        lmpintxt = open('lmp.in').read()
+        lmpintxt = lmpintxt.replace("#compute ", "compute ")
+        lmpintxt = lmpintxt.replace("#dump ", "dump ")
+        lmpintxt = lmpintxt.replace("#dump_modify ", "dump_modify ")
+        lmpintxt += additional_lmpcmds_box
+        open('lmpbox.in', 'w').write(lmpintxt)
+        cmd = '../../lmp -in lmpbox.in -log lmpbox.log > /dev/null'
         _ = subprocess.getoutput(cmd)
-        cputime = subprocess.getoutput("tail -n 1 lmp.log").split()[-1]
+        cputime = subprocess.getoutput("tail -n 1 lmpbox.log").split()[-1]
 
-        step, eng, sg, cell = lammps_read("lmp.log")
+        step, eng, sg, cell = lammps_read("lmpbox.log")
         print(code, "SG=", sg, "LMP:E=", eng, ",LAT=", cell, ", @@", step, ", @", cputime)
 
 

@@ -327,7 +327,7 @@ void FixBoxRelaxSymmetry::adjust_stress() {
 
 void FixBoxRelaxSymmetry::print_symmetry() {
   std::ostringstream message;
-  message  << "[Sym] Prec.: " << symprec
+  message  << "[SymBox] Prec.: " << symprec
             << ", SG number: " << dataset->spacegroup_number
             << ", Sym N ops: " << dataset->spacegroup_number
             << ", Int. symbol: " << dataset->n_operations
