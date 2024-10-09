@@ -319,11 +319,12 @@ void FixSymmetry::adjust_stress() {
 
 void FixSymmetry::print_symmetry() {
   std::ostringstream message;
-  message  << "[Sym] Prec.: " << symprec
-            << ", SG number: " << dataset->spacegroup_number
-            << ", Sym N ops: " << dataset->spacegroup_number
-            << ", Int. symbol: " << dataset->n_operations
-            << ", Hall symbol: " << dataset->hall_symbol << std::endl;
+  message  << "[Sym]"
+            << "SG: " << dataset->spacegroup_number
+            << " Prec.: " << symprec
+            << " SymNops: " << dataset->spacegroup_number
+            << " Int.Symbol: " << dataset->n_operations
+            << " HallSymbol: " << dataset->hall_symbol << std::endl;
   if(comm->me == 0) utils::logmesg(lmp, message.str());
 }
 

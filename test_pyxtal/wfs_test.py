@@ -51,6 +51,7 @@ if __name__ == "__main__":
     smile, wt, spg = row.mol_smi, row.mol_weight, row.space_group.replace(
         " ", "")
     chm_info = None
+
     #if not ffopt:
     #    if "charmm_info" in row.data:
     #        # prepare charmm input

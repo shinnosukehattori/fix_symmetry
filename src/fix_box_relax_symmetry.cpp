@@ -13,6 +13,8 @@
 #include "comm.h"
 #include "memory.h"
 #include "math_extra.h"
+#include "input.h"
+#include "variable.h"
 #include <cmath>
 #include <iostream>
 #include <sstream>
@@ -130,12 +132,12 @@ void FixBoxRelaxSymmetry::setup_pre_force(int vflag) {
 double FixBoxRelaxSymmetry::min_energy(double *fextra) {
   double cell[3][3];
 
+  //adjust_cell();
   //adjust_positions();
   adjust_forces();
   adjust_stress();
 
   double energy = FixBoxRelax::min_energy(fextra);
-  adjust_cell();
 
   return energy;
 }
@@ -327,11 +329,12 @@ void FixBoxRelaxSymmetry::adjust_stress() {
 
 void FixBoxRelaxSymmetry::print_symmetry() {
   std::ostringstream message;
-  message  << "[SymBox] Prec.: " << symprec
-            << ", SG number: " << dataset->spacegroup_number
-            << ", Sym N ops: " << dataset->spacegroup_number
-            << ", Int. symbol: " << dataset->n_operations
-            << ", Hall symbol: " << dataset->hall_symbol << std::endl;
+  message  << "[SymBox]"
+            << "SG: " << dataset->spacegroup_number
+            << " Prec.: " << symprec
+            << " SymNops: " << dataset->spacegroup_number
+            << " Int.Symbol: " << dataset->n_operations
+            << " HallSymbol: " << dataset->hall_symbol << std::endl;
   if(comm->me == 0) utils::logmesg(lmp, message.str());
 }
 

@@ -6,8 +6,9 @@ import lammps_logfile
 
 def lammps_read(fname, last_thermo_pos=-3, sym_pos=-2):
     log = lammps_logfile.File(fname)
-    x = log.get("Step")
-    y = log.get("PotEng")
+    step = log.get("Step")
+    spcpu = log.get("S/CPU")
+    pe = log.get("PotEng")
     a = log.get("Cella")
     b = log.get("Cellb")
     c = log.get("Cellc")
@@ -15,16 +16,22 @@ def lammps_read(fname, last_thermo_pos=-3, sym_pos=-2):
     bet = log.get("CellBeta")
     gam = log.get("CellGamma")
 
-    celpar_ary = [
-        str(a[last_thermo_pos]),
-        str(b[last_thermo_pos]),
-        str(c[last_thermo_pos]),
-        str(alp[last_thermo_pos]),
-        str(bet[last_thermo_pos]),
-        str(gam[last_thermo_pos]),
+    ret = [
+        float(step[last_thermo_pos]) / float(spcpu[last_thermo_pos]),
+        pe[last_thermo_pos],
+        (" ").join([
+            str(a[last_thermo_pos]),
+            str(b[last_thermo_pos]),
+            str(c[last_thermo_pos]),
+            str(alp[last_thermo_pos]),
+            str(bet[last_thermo_pos]),
+            str(gam[last_thermo_pos]),
+        ]),
+        spcpu[sym_pos]
     ]
+    return ret
 
-    return x[last_thermo_pos], y[last_thermo_pos], y[sym_pos], (" ").join(celpar_ary)
+
 
 if __name__ == "__main__":
     from pyxtal.db import database
@@ -61,7 +68,7 @@ if __name__ == "__main__":
             prm.write(chm_info["prm"])
         with open("pyxtal.rtf", "w") as rtf:
                 rtf.write(chm_info["rtf"])
-        chm = CHARMM(xtal, steps=[2000], atom_info=chm_info)
+        chm = CHARMM(xtal, steps=[1000, 1000], atom_info=chm_info)
         chm.run(clean=False)
         print(code, "SG=",chm.structure.group.number, ",CHM:E=", chm.structure.energy, ",LAT=", chm.structure.lattice, ", @", chm.cputime)
 
@@ -87,7 +94,7 @@ min_style cg
 fix 1 all symmetry 5e-5 false false true true
 minimize 1e-5 1e-5 20 20
 
-unfix 2
+unfix 1
 fix 2 all box/relax/symmetry symprec 5e-5 aniso 0.0001 vmax 0.002
 minimize 1e-5 1e-5 500 500
 unfix 2
@@ -95,6 +102,7 @@ fix 2 all box/relax/symmetry symprec 5e-5 tri 0.0001 vmax 0.0001
 minimize 1e-6 1e-6 500 500
         """
         lmpintxt = open('lmp.in').read()
+        lmpintxt = lmpintxt.replace("custom step ", "custom step spcpu ")
         lmpintxt = lmpintxt.replace("#compute ", "compute ")
         lmpintxt = lmpintxt.replace("#dump ", "dump ")
         lmpintxt = lmpintxt.replace("#dump_modify ", "dump_modify ")
@@ -104,7 +112,7 @@ minimize 1e-6 1e-6 500 500
         _ = subprocess.getoutput(cmd)
         cputime = subprocess.getoutput("tail -n 1 lmpbox.log").split()[-1]
 
-        step, eng, sg, cell = lammps_read("lmpbox.log")
+        step, eng, cell, sg = lammps_read("lmpbox.log")
         print(code, "SG=", sg, "LMP:E=", eng, ",LAT=", cell, ", @@", step, ", @", cputime)
 
 
