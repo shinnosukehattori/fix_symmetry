@@ -4,9 +4,17 @@ import subprocess
 import os
 import lammps_logfile
 
-def lammps_read(fname, last_thermo_pos=-3, sym_pos=-2):
+def lammps_read(fname, sym_pos=-1):
+
     log = lammps_logfile.File(fname)
     step = log.get("Step")
+    if not "[Sym" in step[sym_pos]:
+        for i in range(1, 10):
+            if "[Sym" in step[sym_pos-i]:
+                sym_pos = sym_pos - i
+                break
+    last_thermo_pos = sym_pos - 1
+
     spcpu = log.get("S/CPU")
     pe = log.get("PotEng")
     a = log.get("Cella")
@@ -33,6 +41,10 @@ def lammps_read(fname, last_thermo_pos=-3, sym_pos=-2):
 
 
 
+#    step, eng, cell, sg = lammps_read("lmpbox.log")
+#    cputime = subprocess.getoutput("tail -n 1 lmpbox.log").split()[-1]
+#    print("SG=", sg, "LMP:E=", eng, ",LAT=", cell, ", @@", step, ", @", cputime)
+#if False:
 if __name__ == "__main__":
     from pyxtal.db import database
 
@@ -46,13 +58,18 @@ if __name__ == "__main__":
     #codes = ["VOBYAN"]
     #codes = ["AXIDER"]
     #codes = ["ACSALA"]
-    skippes = ["TIDFES", "XAFQAZ", "BOQQUT", "BOQQUT01", "UJIRIO01", "UJIRIO05"] #openff.toolkit.utils.exceptions.UndefinedStereochemistryError: Unable to make OFFMol from SMILES: RDMol has unspecified stereochemistry. Undefined chiral centers
+    skippes = ["TIDFES", "XAFQAZ", "BOQQUT", "BOQQUT01", "UJIRIO01", "UJIRIO02", "UJIRIO05", "XATJOT", "XAFQON"] #openff.toolkit.utils.exceptions.UndefinedStereochemistryError: Unable to make OFFMol from SMILES: RDMol has unspecified stereochemistry. Undefined chiral centers
     for code in codes:
         if code in skippes:
+            print("Skip", code)
             continue
         #workdir
         wdir = "Minimize_LMPSYM_" + code
-        os.makedirs(wdir, exist_ok=True)
+        if os.path.exists(wdir):
+            print("Skip", code, "already exists")
+            continue
+
+        os.makedirs(wdir)
         os.chdir(wdir)
 
         
