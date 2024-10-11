@@ -1,4 +1,5 @@
-test_pyocse*/Minimize_*
+examples/test_pyocse*/Minimize_*
+examples/test_pyxtal/*/
 test.db
 loginfo
 pyxtal.prm
