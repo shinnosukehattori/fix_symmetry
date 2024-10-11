@@ -32,10 +32,8 @@ if __name__ == "__main__":
 
     # db = database('../HT-OCSP/benchmarks/Si.db')
     db = database("./test.db")
-    style = 'gaff' #'openff'
-    #style = 'openff'
-    chargemethod = 'gasteiger'
-    #chargemethod = 'am1bcc'
+    style = 'openff'
+    chargemethod = 'am1bcc'
     #xtal = db.get_pyxtal("ACSALA")
     codes = db.get_all_codes()
     #codes = ["VOBYAN"]
@@ -66,16 +64,26 @@ if __name__ == "__main__":
         with open("pyxtal_db.rtf", "w") as rtf:
             rtf.write(chm_info["rtf"])
 
+        chm = CHARMM(xtal, steps=[2000, 2000], prefix="pyxtal_db", atom_info=chm_info)
+        chm.run(clean=False)
+        print(code, "SG=",chm.structure.group.number, ",CHM_DB:E=", chm.structure.energy, ",LAT=", chm.structure.lattice, ", @", chm.cputime)
+
         # for lammps
         xtal = db.get_pyxtal(code)
         params = ForceFieldParameters([mol.smile for mol in xtal.molecules], style=style, chargemethod=chargemethod)
         params0 = params.params_init.copy()
         chm_struc = params.get_ase_charmm(params0)
+        chm_info = chm_struc.get_charmm_info()
+        with open("pyxtal_gen.prm", "w") as prm:
+            prm.write(chm_info["prm"])
+        with open("pyxtal_gen.rtf", "w") as rtf:
+            rtf.write(chm_info["rtf"])
 
-        chm = CHARMM(xtal, steps=[2000], prefix="pyxtal_db", atom_info=chm_info)
+        chm = CHARMM(xtal, steps=[2000, 2000], prefix="pyxtal_gen", atom_info=chm_info)
         chm.run(clean=False)
         print(code, "SG=",chm.structure.group.number, ",CHM:E=", chm.structure.energy, ",LAT=", chm.structure.lattice, ", @", chm.cputime)
 
+        xtal = db.get_pyxtal(code)
         lmp_struc, _ = params.get_lmp_input_from_structure(xtal.to_ase(resort = False), xtal.numMols, set_template=False)
         lmp_struc.write_lammps(fin="pyxtal.in", fdat="pyxtal.dat")
 
@@ -105,7 +113,7 @@ minimize 1e-6 1e-6 500 500
         open('pyxtal.in', 'a').write(additional_lmpcmds)
         cmd = '../../lmp -in pyxtal.in -log lmp.log > /dev/null'
         _ = subprocess.getoutput(cmd)
-        cputime = subprocess.getoutput("tail -n 1 .log").split()[-1]
+        cputime = subprocess.getoutput("tail -n 1 lmp.log").split()[-1]
 
         step, eng, sg, cell = lammps_read("lmp.log")
         print(code, "SG=", sg, "LMP:E=", eng, ",LAT=", cell, ", @@", step, ", @", cputime)

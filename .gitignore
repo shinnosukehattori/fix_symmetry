@@ -1,5 +1,6 @@
 examples/test_pyocse*/Minimize_*
 examples/test_pyxtal/*/
+examples/compressive_test
 test.db
 loginfo
 pyxtal.prm
@@ -14,3 +15,4 @@ parameters.xml
 *.cif
 dball.txt
 log*
+dump_*
