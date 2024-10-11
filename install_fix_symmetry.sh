@@ -3,17 +3,11 @@
 module load oneapi
 
 # Paths (please adjust according to your environment)
-LAMMPS_DIR="../mylammps"
-LAMMPS_SRC_DIR="$LAMMPS_DIR/src"
+LAMMPS_DIR="$HOME/app/lammps_build/mylammps"
 SPGLIB_INSTALL_DIR="$HOME/.local"
 dirname="build_fix_symmetry"
 
 # Check paths
-if [ ! -d "$LAMMPS_SRC_DIR" ]; then
-  echo "LAMMPS source directory not found: $LAMMPS_SRC_DIR"
-  exit 1
-fi
-
 if [ ! -d "$SPGLIB_INSTALL_DIR" ]; then
   echo "spglib install directory not found: $SPGLIB_INSTALL_DIR"
   exit 1
