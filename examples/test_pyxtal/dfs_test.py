@@ -4,15 +4,48 @@ DFS sampler
 
 from __future__ import annotations
 from time import time
+import os
 from pyxtal.optimize import DFS
+from pyxtal.optimize.common import randomizer
+from pyocse.lmp.pyxtal_calculator import LMP
+from pyocse.parameters import ForceFieldParameters
+exe = "/home/shattori/app/lammps_build/mylammps/build_fix_symmetry/lmp"
 
 
+def myoptimizer(
+    struc,
+    atom_info,
+    workdir,
+    tag = "job_0",
+    opt_lat = True,
+    max_time = 180,
+    skip_ani = False,
+):
+    cwd = os.getcwd()
+    t0 = time()
+    os.chdir(workdir)
+    calc = LMP(struc, atom_info=atom_info, label=tag, exe=exe)
+    calc.run(clean=False)
+    os.chdir(cwd)
+
+    results = {}
+    results["xtal"] = calc.structure
+    results["energy"] = calc.structure.energy
+    results["time"] = time() - t0
+    return results
+        
+
+
+        
 if __name__ == "__main__":
     import argparse
     import os
 
     from pyxtal.db import database
 
+    calculator = LMP
+    calculator.exe = exe
+    
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "-g",
@@ -59,9 +92,36 @@ if __name__ == "__main__":
         xtal = xtal.to_subgroup()
     N_torsion = xtal.get_num_torsions()
 
+    params = ForceFieldParameters([mol.smile for mol in xtal.molecules], style="gaff", chargemethod="am1bcc")
+
+    print(name, xtal.group.number, xtal.has_special_site(), xtal.get_zprime())
     # GO run
     t0 = time()
-    go = DFS(
+    class myDFS (DFS):
+        def _get_local_optimization_args(self):
+            args = [
+                randomizer,
+                myoptimizer,
+                self.smiles,
+                self.block,
+                self.num_block,
+                self.direct_atominfo, #params instead of atom_info oself.atom_info,
+                self.workdir + "/" + "calc",
+                self.sg,
+                self.composition,
+                self.lattice,
+                self.torsions,
+                self.molecules,
+                self.sites,
+                self.ref_pmg,
+                self.matcher,
+                self.ref_pxrd,
+                self.use_hall,
+                self.skip_ani,
+                self.check_stable,
+            ]
+            return args
+    go = myDFS(
         smile,
         wdir,
         xtal.group.number,
@@ -75,9 +135,9 @@ if __name__ == "__main__":
         cif="pyxtal.cif",
         skip_ani = True,
     )
+    go.direct_atominfo = params
 
-    #suc_rate = go.run(pmg0)   !!!error by refstructure broken? connectivity
-    suc_rate = go.run()
+    suc_rate = go.run(pmg0)
     print(f"CSD {name:s} in Gen {go.generation:d}")
 
     if len(go.matches) > 0:
