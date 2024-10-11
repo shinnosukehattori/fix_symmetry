@@ -1,5 +1,6 @@
 from pyocse.parameters import ForceFieldParameters
 from pyxtal.interface.charmm import CHARMM
+from pyocse.lmp import LAMMPSStructure
 import subprocess
 import os
 import lammps_logfile
@@ -32,6 +33,7 @@ if __name__ == "__main__":
     # db = database('../HT-OCSP/benchmarks/Si.db')
     db = database("./test.db")
     style = 'gaff' #'openff'
+    #style = 'openff'
     chargemethod = 'gasteiger'
     #chargemethod = 'am1bcc'
     #xtal = db.get_pyxtal("ACSALA")
@@ -39,7 +41,10 @@ if __name__ == "__main__":
     #codes = ["VOBYAN"]
     #codes = ["AXIDER"]
     codes = ["ACSALA"]
-    skippes = ["TIDFES", "XAFQAZ", "BOQQUT", "BOQQUT01", "UJIRIO01", "UJIRIO05"] #openff.toolkit.utils.exceptions.UndefinedStereochemistryError: Unable to make OFFMol from SMILES: RDMol has unspecified stereochemistry. Undefined chiral centers
+    skippes = []
+    #skippes = ["TIDFES", "XAFQAZ", "BOQQUT", "BOQQUT01", "UJIRIO01", "UJIRIO05"] #openff.toolkit.utils.exceptions.UndefinedStereochemistryError: Unable to make OFFMol from SMILES: RDMol has unspecified stereochemistry. Undefined chiral centers
+    #codes = [ "UJIRIO01", "UJIRIO05"] #openff.toolkit.utils.exceptions.UndefinedStereochemistryError: Unable to make OFFMol from SMILES: RDMol has unspecified stereochemistry. Undefined chiral centers
+
     for code in codes:
         if code in skippes:
             continue
@@ -56,22 +61,26 @@ if __name__ == "__main__":
         if xtal.has_special_site():
             xtal = xtal.to_subgroup()
         chm_info = row.data["charmm_info"]
-        with open("pyxtal.prm", "w") as prm:
+        with open("pyxtal_db.prm", "w") as prm:
             prm.write(chm_info["prm"])
-        with open("pyxtal.rtf", "w") as rtf:
-                rtf.write(chm_info["rtf"])
-        chm = CHARMM(xtal, steps=[2000], atom_info=chm_info)
-        chm.run(clean=False)
-        print(code, "SG=",chm.structure.group.number, ",CHM:E=", chm.structure.energy, ",LAT=", chm.structure.lattice, ", @", chm.cputime)
+        with open("pyxtal_db.rtf", "w") as rtf:
+            rtf.write(chm_info["rtf"])
 
         # for lammps
         xtal = db.get_pyxtal(code)
         params = ForceFieldParameters([mol.smile for mol in xtal.molecules], style=style, chargemethod=chargemethod)
-        lmp_struc, _ = params.get_lmp_input_from_structure(xtal.to_ase(resort=False), xtal.numMols)
-        lmp_struc.write_lammps()
+        params0 = params.params_init.copy()
+        chm_struc = params.get_ase_charmm(params0)
+
+        chm = CHARMM(xtal, steps=[2000], prefix="pyxtal_db", atom_info=chm_info)
+        chm.run(clean=False)
+        print(code, "SG=",chm.structure.group.number, ",CHM:E=", chm.structure.energy, ",LAT=", chm.structure.lattice, ", @", chm.cputime)
+
+        lmp_struc, _ = params.get_lmp_input_from_structure(xtal.to_ase(resort = False), xtal.numMols, set_template=False)
+        lmp_struc.write_lammps(fin="pyxtal.in", fdat="pyxtal.dat")
 
         additional_lmpcmds = """
-fix 1 all symmetry 5e-5 false false true true true 
+fix 1 all symmetry 5e-5 false false true true true
 min_style       cg
 minimize 1e-5 0 20 20
 
@@ -93,10 +102,10 @@ unfix 2
 fix 2 all box/relax/symmetry symprec 5e-5 tri 0.0001 vmax 0.0001
 minimize 1e-6 1e-6 500 500
         """
-        open('lmp.in', 'a').write(additional_lmpcmds)
-        cmd = '../../lmp -in lmp.in -log lmp.log > /dev/null'
+        open('pyxtal.in', 'a').write(additional_lmpcmds)
+        cmd = '../../lmp -in pyxtal.in -log lmp.log > /dev/null'
         _ = subprocess.getoutput(cmd)
-        cputime = subprocess.getoutput("tail -n 1 lmp.log").split()[-1]
+        cputime = subprocess.getoutput("tail -n 1 .log").split()[-1]
 
         step, eng, sg, cell = lammps_read("lmp.log")
         print(code, "SG=", sg, "LMP:E=", eng, ",LAT=", cell, ", @@", step, ", @", cputime)

@@ -1,10 +1,10 @@
 """
-WFS sampler
+DFS sampler
 """
 
 from __future__ import annotations
 from time import time
-from pyxtal.optimize import WFS
+from pyxtal.optimize import DFS
 
 
 if __name__ == "__main__":
@@ -40,6 +40,8 @@ if __name__ == "__main__":
     pop = options.pop
     ncpu = options.ncpu
     ffopt = options.ffopt
+    #db_name, name = "test.db", "ACSALA" #please copy from pyxtal repo
+    #db_name, name = "test.db", "DURNAH" #please copy from pyxtal repo
     db_name, name = "test.db", "ACSALA" #please copy from pyxtal repo
     wdir = name
     os.makedirs(wdir, exist_ok=True)
@@ -52,19 +54,6 @@ if __name__ == "__main__":
         " ", "")
     chm_info = None
 
-    #if not ffopt:
-    #    if "charmm_info" in row.data:
-    #        # prepare charmm input
-    #        chm_info = row.data["charmm_info"]
-    #        with open(wdir + "/calc/pyxtal.prm", "w") as prm:
-    #            prm.write(chm_info["prm"])
-    #        with open(wdir + "/calc/pyxtal.rtf", "w") as rtf:
-    #            rtf.write(chm_info["rtf"])
-    #    else:
-    #        # Make sure we generate the initial guess from ambertools
-    #        if os.path.exists("parameters.xml"):
-    #            os.remove("parameters.xml")
-    # load reference xtal
     pmg0 = xtal.to_pymatgen()
     if xtal.has_special_site():
         xtal = xtal.to_subgroup()
@@ -72,7 +61,7 @@ if __name__ == "__main__":
 
     # GO run
     t0 = time()
-    go = WFS(
+    go = DFS(
         smile,
         wdir,
         xtal.group.number,
@@ -84,9 +73,11 @@ if __name__ == "__main__":
         N_pop=pop,
         N_cpu=ncpu,
         cif="pyxtal.cif",
+        skip_ani = True,
     )
 
-    suc_rate = go.run(pmg0)
+    #suc_rate = go.run(pmg0)   !!!error by refstructure broken? connectivity
+    suc_rate = go.run()
     print(f"CSD {name:s} in Gen {go.generation:d}")
 
     if len(go.matches) > 0:
