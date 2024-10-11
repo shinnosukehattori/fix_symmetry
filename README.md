@@ -29,7 +29,11 @@ sudo make install
 
 Ensure that the `spglib` header files and libraries are installed in standard system directories or note their installation paths for later use.
 
-### 2. Copy FixSymmetry Source Files
+### 2. Modify the instalation related files in lammps for FixSymmetry
+Basically, you can use install_fix_symmetry.sh with CMake compiliation in lammps.
+If you would like to compile manually with Make, please check below.
+
+### 2-1. Copy FixSymmetry Source Files
 
 Copy `fix_symmetry.h` and `fix_symmetry.cpp` into the LAMMPS `src` directory:
 
@@ -38,7 +42,7 @@ cp fix_symmetry.h /path/to/lammps/src/
 cp fix_symmetry.cpp /path/to/lammps/src/
 ```
 
-### 3. Update LAMMPS Build Configuration
+### 2-2. Update LAMMPS Build Configuration
 Use
 Install_?
 
@@ -50,10 +54,10 @@ cd /path/to/lammps/src
 
 #### For Makefile Build System:
 
-- **Add Source File**: Append `fix_symmetry.cpp` to the list of source files. Edit `Makefile` or `Makefile.list` and include:
+- **Add Source File**: Append `fix_symmetry.cpp` and `fix_box_relax_symmetry.cpp` to the list of source files. Edit `Makefile` or `Makefile.list` and include:
 
   ```
-  EXTRA_SRCS += fix_symmetry.cpp
+  EXTRA_SRCS += fix_symmetry.cpp:fix_box_relax_symmtery.cpp
   ```
 
 - **Include spglib Headers and Libraries**: Add the spglib include and library paths. Edit `Makefile.lammps` and include:
@@ -72,14 +76,26 @@ cd /path/to/lammps/src
   In `CMakeLists.txt`, add:
 
   ```cmake
-  set(SOURCES ${SOURCES} fix_symmetry.cpp)
+  set(SOURCES ${SOURCES} fix_symmetry.cpp:fix_box_relax_symmetry.cpp)
   find_package(spglib REQUIRED)
   include_directories(${SPGLIB_INCLUDE_DIRS})
   target_link_libraries(lammps ${SPGLIB_LIBRARIES})
   ```
 
-### 4. Build LAMMPS
+### 3. Build LAMMPS
 
+
+#### CMake
+```bash
+mkdir build
+cd build
+cmake ../cmake ...
+
+
+make -j8
+```
+
+#### Make
 Clean previous builds (optional):
 
 ```bash
@@ -98,61 +114,26 @@ Ensure that the compiler can find `spglib` headers and libraries. If not in stan
 
 After successful compilation, verify that `FixSymmetry` is included:
 
-- Run `lmp_mpi -h` and check if `fix symmetry` appears in the list of available fixes.
+- Run `lmp_mpi -h` and check if `fix symmetry` and `fix box/relax/symmetry` appears in the list of available fixes.
 - Alternatively, proceed to run the test simulation.
 
-## Running the Test Simulation
-
-### 1. Copy the Test Input Script
-
-Copy the test input script `in.fix_symmetry_test` to a working directory:
-
-```bash
-cp in.fix_symmetry_test /path/to/working/directory/
-```
-
-### 2. Prepare the Potential File
-
-Ensure that the required EAM potential file `Cu_u3.eam` is available:
-
-- Copy it from the LAMMPS `potentials` directory:
-
-  ```bash
-  cp /path/to/lammps/potentials/Cu_u3.eam /path/to/working/directory/
-  ```
-
-### 3. Run the Simulation
-
-Navigate to the working directory and execute the simulation:
-
-```bash
-cd /path/to/working/directory/
-lmp_mpi -in in.fix_symmetry_test
-```
-
-Replace `lmp_mpi` with the name of your LAMMPS executable if different.
-
-### 4. Analyze Results
-
-- Check the output to ensure that the simulation runs without errors.
-- Verify that the symmetry is enforced by inspecting the dump files or output data.
-
-## Usage Example
+## Usage Example without box change
 
 In your LAMMPS input script, use `FixSymmetry` as follows:
 
 ```lammps
-fix sym all symmetry <spacegroup_number> <tolerance>
+fix sym all symmetry <tolerance>
 ```
-
-- `<spacegroup_number>`: The international number of the space group (e.g., 225 for Fm-3m).
 - `<tolerance>`: Optional. The tolerance for symmetry enforcement (default is `1e-5`).
 
-**Example:**
+## Usage Example with box change
+
+In your LAMMPS input script, use `FixSymmetry` as follows:
 
 ```lammps
-fix sym all symmetry 225 1e-5
+fix sym all box/relax/symmetry symprec <tolerance>
 ```
+- `<tolerance>`: Optional. The tolerance for symmetry enforcement (default is `1e-5`).
 
 ## Troubleshooting
 
