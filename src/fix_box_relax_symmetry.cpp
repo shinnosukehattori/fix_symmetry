@@ -145,7 +145,7 @@ double FixBoxRelaxSymmetry::min_energy(double *fextra) {
 
 void FixBoxRelaxSymmetry::post_run() {
   store_all_coordinates();
-  check_symmetry(false);
+  check_symmetry(true, false);
 }
 
 int FixBoxRelaxSymmetry::get_index(std::vector<int> &vec, int val) {
@@ -327,27 +327,30 @@ void FixBoxRelaxSymmetry::adjust_stress() {
   stress[5] = stress_tensor[0][1];
 }
 
-void FixBoxRelaxSymmetry::print_symmetry() {
+void FixBoxRelaxSymmetry::print_symmetry(int prev) {
   std::ostringstream message;
-  message  << "[SymBox]"
-            << "SG: " << dataset->spacegroup_number
-            << " Prec.: " << symprec
-            << " SymNops: " << dataset->spacegroup_number
-            << " Int.Symbol: " << dataset->n_operations
-            << " HallSymbol: " << dataset->hall_symbol << std::endl;
+  message  << "[Sym]"
+           << "SG: " << dataset->spacegroup_number;
+  if (prev >= 0) {
+     message << " (" << prev << ")";
+  }
+  message << " Prec.: " << symprec
+          << " SymNops: " << dataset->n_operations
+          << " Int.Symbol: " << dataset->international_symbol
+          << " HallSymbol: " << dataset->hall_symbol << std::endl;
   if(comm->me == 0) utils::logmesg(lmp, message.str());
 }
 
 void FixBoxRelaxSymmetry::refine_symmetry() {
   //check_and_symmetrize_cell
   store_all_coordinates();
-  check_symmetry(false);
+  check_symmetry(true, false);
   symmetrize_cell();
-  check_symmetry(true); //use symmetrized cell and find primitive
+  check_symmetry(false, true); //use symmetrized cell and find primitive
   symmetrize_positions();
 
   store_all_coordinates();
-  check_symmetry(false);
+  check_symmetry(false, false);
   return;
 }
 
@@ -492,7 +495,7 @@ void FixBoxRelaxSymmetry::store_all_coordinates() {
   //MPI_Allreduce(MPI_IN_PLACE, all_types, natoms, MPI_INT, MPI_SUM, world);
 }
 
-void FixBoxRelaxSymmetry::check_symmetry(bool do_find_prim) {
+void FixBoxRelaxSymmetry::check_symmetry(bool do_print, bool do_find_prim) {
 
   int natoms = atom->natoms;
 
@@ -508,7 +511,12 @@ void FixBoxRelaxSymmetry::check_symmetry(bool do_find_prim) {
     std::string spg_error_msg = spg_get_error_message(spg_get_error_code());
     error->all(FLERR, spg_error_msg.c_str());
   }
-  print_symmetry();
+
+  if ( do_print || spacegroup_number != dataset->spacegroup_number) {
+    print_symmetry(spacegroup_number);
+  }
+
+  spacegroup_number = dataset->spacegroup_number;
 
   if (do_find_prim) {
     int find_prim = spg_find_primitive(t_cell, (double (*)[3])all_positions, all_types, natoms, symprec);

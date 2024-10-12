@@ -1,5 +1,6 @@
 examples/test_pyocse*/Minimize_*
-examples/test_pyxtal/*/
+examples/test_htocsp/*/
+examples/test_htocsp/pyxtal_calculator.py
 examples/compressive_test
 test.db
 loginfo

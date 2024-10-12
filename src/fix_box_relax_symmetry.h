@@ -73,14 +73,14 @@ class FixBoxRelaxSymmetry : public ARGRemover, public FixBoxRelax {
   void adjust_forces();
   void adjust_stress();
 
-  void print_symmetry();
+  void print_symmetry(int);
   void refine_symmetry();
   void symmetrize_cell();
   void symmetrize_positions();
 
   void store_all_coordinates();
   void prep_symmetry();
-  void check_symmetry(bool do_find_prim);
+  void check_symmetry(bool, bool);
 
   void symmetrize_rank1(std::vector<double[3]> &vec);
   void symmetrize_rank2(double vec[3][3]);
