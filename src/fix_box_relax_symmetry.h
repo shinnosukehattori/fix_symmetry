@@ -30,6 +30,8 @@ class ARGRemover {
   int narg_new;
   char **arg_new;
   double symprec;
+  double symcell;
+  double symposs;
   bool debug;
 };
 

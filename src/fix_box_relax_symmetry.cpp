@@ -28,6 +28,8 @@ ARGRemover::ARGRemover(LAMMPS *lmp, int narg, char **arg) {
   narg_new = 0;
   arg_new = nullptr;
   symprec = 1e-4;
+  symcell = false;
+  symposs = false;
   debug = false;
 
   //save original arguments and copy and remove the arguments 
@@ -36,6 +38,14 @@ ARGRemover::ARGRemover(LAMMPS *lmp, int narg, char **arg) {
     if (strcmp(arg[iarg],"symprec") == 0) {
       if (iarg+2 > narg) utils::missing_cmd_args(FLERR, "fix box/relax/symmetry symprec", lmp->error);
       symprec = utils::numeric(FLERR, arg[iarg+1], false, lmp);
+      iarg++;
+    } else if (strcmp(arg[iarg],"symcell") == 0) {
+      if (iarg+2 > narg) utils::missing_cmd_args(FLERR, "fix box/relax/symmetry symprec", lmp->error);
+      symcell = utils::logical(FLERR, arg[iarg+1], false, lmp);
+      iarg++;
+    } else if (strcmp(arg[iarg],"symposs") == 0) {
+      if (iarg+2 > narg) utils::missing_cmd_args(FLERR, "fix box/relax/symmetry symprec", lmp->error);
+      symposs = utils::logical(FLERR, arg[iarg+1], false, lmp);
       iarg++;
     } else if (strcmp(arg[iarg],"debug") == 0) {
       if (iarg+2 > narg) utils::missing_cmd_args(FLERR, "fix box/relax/symmetry symprec", lmp->error);
@@ -49,7 +59,10 @@ ARGRemover::ARGRemover(LAMMPS *lmp, int narg, char **arg) {
     arg_new  = new char*[narg_new];
     int j = 0;
     for (int i = 0; i < narg; i++) {
-      if (strcmp(arg[i], "symprec") == 0 || strcmp(arg[i], "debug") == 0) {
+      if (strcmp(arg[i], "symprec") == 0 ||
+          strcmp(arg[i], "symcell") == 0 ||
+          strcmp(arg[i], "symposs") == 0 ||
+          strcmp(arg[i], "debug") == 0) {
         i++;
       } else {
         arg_new[j] = strdup(arg[i]);
@@ -85,6 +98,7 @@ FixBoxRelaxSymmetry::FixBoxRelaxSymmetry(LAMMPS *lmp, int narg, char **arg) : AR
     }
   }
 
+  spacegroup_number = -1;
 
   // Initialize previous positions array
   prev_positions = nullptr;
@@ -125,6 +139,7 @@ void FixBoxRelaxSymmetry::init() {
 
 void FixBoxRelaxSymmetry::setup_pre_force(int vflag) {
   save_prev_position();
+  if(symposs) save_prev_position();
   adjust_forces();
   adjust_stress();
 }
@@ -132,8 +147,8 @@ void FixBoxRelaxSymmetry::setup_pre_force(int vflag) {
 double FixBoxRelaxSymmetry::min_energy(double *fextra) {
   double cell[3][3];
 
-  //adjust_cell();
-  //adjust_positions();
+  if(symcell) adjust_cell();
+  if(symposs) adjust_positions();
   adjust_forces();
   adjust_stress();
 
@@ -329,7 +344,7 @@ void FixBoxRelaxSymmetry::adjust_stress() {
 
 void FixBoxRelaxSymmetry::print_symmetry(int prev) {
   std::ostringstream message;
-  message  << "[Sym]"
+  message  << "[SymBox]"
            << "SG: " << dataset->spacegroup_number;
   if (prev >= 0) {
      message << " (" << prev << ")";
