@@ -27,6 +27,7 @@ class ARGRemover {
  public:
   ARGRemover(class LAMMPS *, int, char **);
   ~ARGRemover();
+ protected:
   int narg_new;
   char **arg_new;
   double symprec;
@@ -35,7 +36,7 @@ class ARGRemover {
   bool debug;
 };
 
-class FixBoxRelaxSymmetry : public ARGRemover, public FixBoxRelax {
+class FixBoxRelaxSymmetry : protected ARGRemover, public FixBoxRelax {
  public:
   FixBoxRelaxSymmetry(class LAMMPS *, int, char **);
   ~FixBoxRelaxSymmetry();
@@ -48,9 +49,8 @@ class FixBoxRelaxSymmetry : public ARGRemover, public FixBoxRelax {
  private:
   int spacegroup_number;
 
-  double sym_cell[3][3];
-  double inv_sym_cell[3][3];
   double prim_cell[3][3];
+  double sym_cell[3][3];
 
   double ***rotation_matrices;
   double **translation_vectors;
@@ -67,13 +67,14 @@ class FixBoxRelaxSymmetry : public ARGRemover, public FixBoxRelax {
   // Symmetrization functions
   int get_index(std::vector<int> &vec, int val);
   void get_cell(double cell[3][3]);
+  void get_cell(double cell[3][3], double inv_cell[3][3]);
   void set_cell(double cell[3][3]);
   void save_prev_position();
 
   void adjust_cell();
-  void adjust_positions();
-  void adjust_forces();
-  void adjust_stress();
+  void adjust_positions(double cell[3][3], double inv_cell[3][3]);
+  void adjust_forces(double cell[3][3], double inv_cell[3][3]);
+  void adjust_stress(double cell[3][3], double inv_cell[3][3]);
 
   void print_symmetry(int);
   void refine_symmetry();
@@ -84,8 +85,8 @@ class FixBoxRelaxSymmetry : public ARGRemover, public FixBoxRelax {
   void prep_symmetry();
   void check_symmetry(bool, bool);
 
-  void symmetrize_rank1(std::vector<double[3]> &vec);
-  void symmetrize_rank2(double vec[3][3]);
+  void symmetrize_rank1(std::vector<double[3]> &vec, double cell[3][3], double inv_cell[3][3]);
+  void symmetrize_rank2(double vec[3][3], double cell[3][3], double inv_cell[3][3]);
 
 };
 

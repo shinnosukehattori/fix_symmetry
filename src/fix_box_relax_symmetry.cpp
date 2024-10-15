@@ -28,7 +28,7 @@ ARGRemover::ARGRemover(LAMMPS *lmp, int narg, char **arg) {
   narg_new = 0;
   arg_new = nullptr;
   symprec = 1e-4;
-  symcell = false;
+  symcell = true;
   symposs = false;
   debug = false;
 
@@ -92,8 +92,6 @@ FixBoxRelaxSymmetry::FixBoxRelaxSymmetry(LAMMPS *lmp, int narg, char **arg) : AR
 
   for (int i = 0; i < 3; i++) {
     for (int j = 0; j < 3; j++) {
-      sym_cell[i][j] = 0.0;
-      inv_sym_cell[i][j] = 0.0;
       prim_cell[i][j] = 0.0;
     }
   }
@@ -138,22 +136,37 @@ void FixBoxRelaxSymmetry::init() {
 
 
 void FixBoxRelaxSymmetry::setup_pre_force(int vflag) {
-  save_prev_position();
+  double cell[3][3];
+  double inv_cell[3][3];
+
+  get_cell(cell, inv_cell);
+  adjust_forces(cell, inv_cell);
+  adjust_stress(cell, inv_cell);
+
+  for (int i = 0; i < 3; i++) {
+    for (int j = 0; j < 3; j++) {
+      sym_cell[i][j] = cell[i][j];
+    }
+  }
   if(symposs) save_prev_position();
-  adjust_forces();
-  adjust_stress();
 }
 
 double FixBoxRelaxSymmetry::min_energy(double *fextra) {
   double cell[3][3];
+  double inv_cell[3][3];
 
   if(symcell) adjust_cell();
-  if(symposs) adjust_positions();
-  adjust_forces();
-  adjust_stress();
+
+  get_cell(cell, inv_cell);
+  adjust_forces(cell, inv_cell);
+  adjust_stress(cell, inv_cell);
 
   double energy = FixBoxRelax::min_energy(fextra);
 
+  if(symposs){
+    adjust_positions(cell, inv_cell);
+    save_prev_position();
+  }
   return energy;
 }
 
@@ -178,25 +191,38 @@ void FixBoxRelaxSymmetry::get_cell(double cell[3][3]) {
   cell[1][1] = domain->h[1];
   cell[2][2] = domain->h[2];
   if (domain->triclinic) {
-    cell[1][0] = domain->xy;
-    cell[2][0] = domain->xz;
-    cell[2][1] = domain->yz;
+    cell[2][1] = domain->h[3]; //yz
+    cell[2][0] = domain->h[4]; //xz
+    cell[1][0] = domain->h[5]; //xy
   } else {
     cell[1][0] = cell[2][0] = cell[2][1] = 0.0;
+  }
+}
+void FixBoxRelaxSymmetry::get_cell(double cell[3][3], double inv_cell[3][3]) {
+  get_cell(cell);
+  inv_cell[0][1] = inv_cell[0][2] = inv_cell[1][2] = 0.0;
+  inv_cell[0][0] = domain->h_inv[0];
+  inv_cell[1][1] = domain->h_inv[1];
+  inv_cell[2][2] = domain->h_inv[2];
+  if (domain->triclinic) {
+    inv_cell[2][1] = domain->h_inv[3]; //yz
+    inv_cell[2][0] = domain->h_inv[4]; //xz
+    inv_cell[1][0] = domain->h_inv[5]; //xy
+  } else {
+    inv_cell[1][0] = inv_cell[2][0] = inv_cell[2][1] = 0.0;
   }
 }
 
 void FixBoxRelaxSymmetry::set_cell(double cell[3][3]) {
 
   // Update cell matrix
-  domain->boxlo[0] = domain->boxlo[1] = domain->boxlo[2] = 0.0;
   domain->boxhi[0] = cell[0][0];
   domain->boxhi[1] = cell[1][1];
   domain->boxhi[2] = cell[2][2];
   if (domain->triclinic) {
-    domain->xy = cell[1][0];
-    domain->xz = cell[2][0];
     domain->yz = cell[2][1];
+    domain->xz = cell[2][0];
+    domain->xy = cell[1][0];
   }
 
   // Update related parameters
@@ -213,20 +239,21 @@ void FixBoxRelaxSymmetry::save_prev_position() {
     memory->create(prev_positions, atom->nlocal, 3, "fix_box_relax_symmetry:prev_positions");
   }
   for (int i = 0; i < atom->nlocal; i++) {
-    prev_positions[i][0] = atom->x[i][0];
-    prev_positions[i][1] = atom->x[i][1];
-    prev_positions[i][2] = atom->x[i][2];
+    domain->unmap(atom->x[i], atom->image[i], prev_positions[i]);
   }
 }
 
 void FixBoxRelaxSymmetry::adjust_cell() {
 
   double cell[3][3];
+  double inv_sym_cell[3][3];
+  double tmp[3][3];
 
   get_cell(cell);
+  MathExtra::invert3(sym_cell, inv_sym_cell);
   double delta_deform_grad0[3][3];
   double delta_deform_grad[3][3];
-  MathExtra::transpose_times3(inv_sym_cell, cell, delta_deform_grad0);
+  MathExtra::times3(inv_sym_cell, cell, delta_deform_grad0);
   MathExtra::transpose3(delta_deform_grad0, delta_deform_grad);
 
   delta_deform_grad[0][0] -= 1.0;
@@ -244,12 +271,12 @@ void FixBoxRelaxSymmetry::adjust_cell() {
   }
   if (max_delta_grad > 0.25){
     error->all(FLERR, "Too large deformation gradient in FixBoxRelaxSymmetry::adjust_cell");
-  } else if (max_delta_grad > 1.0) {
+  } else if (max_delta_grad > 0.15) {
     std::string message = fmt::format("Warning! max_delta_grad = {:f}\n", max_delta_grad);
     utils::logmesg(lmp, message);
   }
 
-  symmetrize_rank2(delta_deform_grad);
+  symmetrize_rank2(delta_deform_grad, sym_cell, inv_sym_cell);
 
   delta_deform_grad[0][0] += 1.0;
   delta_deform_grad[1][1] += 1.0;
@@ -257,46 +284,51 @@ void FixBoxRelaxSymmetry::adjust_cell() {
 
   //update
   MathExtra::transpose3(delta_deform_grad, delta_deform_grad0);
-  MathExtra::transpose_times3(sym_cell, delta_deform_grad0, cell);
+  MathExtra::times3(sym_cell, delta_deform_grad0, tmp);
 
-  if (debug) {
-    utils::logmesg(lmp, "Symmetrized Cell Matrix (adj) = ");
-    for (int i = 0; i < 3; i++) {
-      for (int j = 0; j < 3; j++) {
-        std::string message = fmt::format("{:5.3f}->{:5.3f}, ", sym_cell[i][j], cell[i][j]);
+  if (debug) utils::logmesg(lmp, "Symmetrized Cell Matrix (adj) = ");
+  for (int i = 0; i < 3; i++) {
+    for (int j = 0; j < 3; j++) {
+      if (debug){
+        std::string message = fmt::format("{:5.3f}->{:5.3f}, ", cell[i][j], tmp[i][j]);
         utils::logmesg(lmp, message);
-        sym_cell[i][j] = cell[i][j];
       }
+      sym_cell[i][j] = tmp[i][j];
     }
-    utils::logmesg(lmp, "\n");
   }
-  set_cell(cell);
-  MathExtra::invert3(sym_cell, inv_sym_cell);
+  if (debug) utils::logmesg(lmp, "\n");
+  domain->x2lamda(atom->nlocal);
+  set_cell(tmp);
+  domain->lamda2x(atom->nlocal);
 }
 
-void FixBoxRelaxSymmetry::adjust_positions() {
+void FixBoxRelaxSymmetry::adjust_positions(double cell[3][3], double inv_cell[3][3]) {
   double **x = atom->x;
+  imageint *image = atom->image;
   int nlocal = atom->nlocal;
 
   std::vector<double[3]> step(nlocal);
   for (int i = 0; i < nlocal; i++) {
-    step[i][0] = x[i][0] - prev_positions[i][0];
-    step[i][1] = x[i][1] - prev_positions[i][1];
-    step[i][2] = x[i][2] - prev_positions[i][2];
+    double pos[3];
+    domain->unmap(x[i], image[i], pos);
+    step[i][0] = pos[0] - prev_positions[i][0];
+    step[i][1] = pos[1] - prev_positions[i][1];
+    step[i][2] = pos[2] - prev_positions[i][2];
   }
 
   // Symmetrize Positions
-  symmetrize_rank1(step);
+  symmetrize_rank1(step, cell, inv_cell);
 
   // Update 
   for (int i = 0; i < nlocal; i++) {
     x[i][0] = prev_positions[i][0] + step[i][0];
     x[i][1] = prev_positions[i][1] + step[i][1];
     x[i][2] = prev_positions[i][2] + step[i][2];
+    domain->unmap_inv(x[i], image[i]);
   }
 }
 
-void FixBoxRelaxSymmetry::adjust_forces() {
+void FixBoxRelaxSymmetry::adjust_forces(double cell[3][3], double inv_cell[3][3]) {
   double **f = atom->f;
   int nlocal = atom->nlocal;
 
@@ -309,7 +341,7 @@ void FixBoxRelaxSymmetry::adjust_forces() {
   }
 
   // Symmetrize forces
-  symmetrize_rank1(forces);
+  symmetrize_rank1(forces, cell, inv_cell);
 
   // Update forces
   for (int i = 0; i < nlocal; i++) {
@@ -319,19 +351,19 @@ void FixBoxRelaxSymmetry::adjust_forces() {
   }
 }
 
-void FixBoxRelaxSymmetry::adjust_stress() {
+void FixBoxRelaxSymmetry::adjust_stress(double cell[3][3], double inv_cell[3][3]) {
   // Get global stress tensor
   double *stress = virial;
   double stress_tensor[3][3];
   stress_tensor[0][0] = stress[0];
   stress_tensor[1][1] = stress[1];
   stress_tensor[2][2] = stress[2];
-  stress_tensor[1][2] = stress_tensor[2][1] = stress[3];
-  stress_tensor[0][2] = stress_tensor[2][0] = stress[4];
-  stress_tensor[0][1] = stress_tensor[1][0] = stress[5];
+  stress_tensor[1][2] = stress_tensor[2][1] = stress[3]*0.5;
+  stress_tensor[0][2] = stress_tensor[2][0] = stress[4]*0.5;
+  stress_tensor[0][1] = stress_tensor[1][0] = stress[5]*0.5;
 
   // Symmetrize stress tensor
-  symmetrize_rank2(stress_tensor);
+  symmetrize_rank2(stress_tensor, cell, inv_cell);
 
   // Update stress tensor in LAMMPS
   stress[0] = stress_tensor[0][0];
@@ -374,22 +406,24 @@ void FixBoxRelaxSymmetry::symmetrize_cell() {
   // Get standard cell matrix
   double trans_std_cell[3][3];
   double std_cell[3][3];
+  double cell[3][3];
   MathExtra::transpose3(dataset->std_lattice, std_cell);
   MathExtra::transpose_times3(dataset->transformation_matrix,  std_cell, trans_std_cell);
-  MathExtra::times3(trans_std_cell,  dataset->std_rotation_matrix, sym_cell);
-  MathExtra::invert3(sym_cell, inv_sym_cell);
+  MathExtra::times3(trans_std_cell,  dataset->std_rotation_matrix, cell);
 
   //dump cell matrix
   utils::logmesg(lmp, "Symmetrized Cell Matrix = ");
   for (int i = 0; i < 3; i++) {
     for (int j = 0; j < 3; j++) {
-      std::string message = fmt::format("{:f},", sym_cell[i][j]);
+      std::string message = fmt::format("{:f},", cell[i][j]);
       utils::logmesg(lmp, message);
     }
   }
   utils::logmesg(lmp, "\n");
 
-  set_cell(sym_cell);
+  domain->x2lamda(atom->nlocal);
+  set_cell(cell);
+  domain->lamda2x(atom->nlocal);
 }
 
 void FixBoxRelaxSymmetry::symmetrize_positions() {
@@ -614,14 +648,14 @@ void FixBoxRelaxSymmetry::prep_symmetry() {
   }
 }
 
-void FixBoxRelaxSymmetry::symmetrize_rank1(std::vector<double[3]> &vec) {
+void FixBoxRelaxSymmetry::symmetrize_rank1(std::vector<double[3]> &vec, double cell[3][3], double inv_cell[3][3]) {
   int nlocal = atom->nlocal;
   int nsym = dataset->n_operations;
 
   std::vector<double[3]> scaled_vec(nlocal);
 
   for (int i = 0; i < nlocal; i++) {
-    MathExtra::transpose_matvec(inv_sym_cell, vec[i], scaled_vec[i]);
+    MathExtra::transpose_matvec(inv_cell, vec[i], scaled_vec[i]);
   }
 
   // Initialize symmetrized vectors
@@ -668,26 +702,26 @@ void FixBoxRelaxSymmetry::symmetrize_rank1(std::vector<double[3]> &vec) {
   }
 
   for (int i = 0; i < nlocal; i++) {
-    MathExtra::matvec(sym_cell, sym_vec[i], vec[i]);
+    MathExtra::matvec(cell, sym_vec[i], vec[i]);
   }
 }
 
-void FixBoxRelaxSymmetry::symmetrize_rank2(double tensor[3][3]) {
+void FixBoxRelaxSymmetry::symmetrize_rank2(double tensor[3][3], double cell[3][3], double inv_cell[3][3]) {
   int nlocal = atom->nlocal;
   int nsym = dataset->n_operations;
 
   std::vector<double[3]> scaled_vec(nlocal);
   double t_cell[3][3];
   double t_inv_cell[3][3];
-  MathExtra::transpose3(sym_cell, t_cell);
-  MathExtra::transpose3(inv_sym_cell, t_inv_cell);
+  MathExtra::transpose3(cell, t_cell);
+  MathExtra::transpose3(inv_cell, t_inv_cell);
 
   double tmp0[3][3];
   double tmp1[3][3];
   double tmp4[3][3];
   double tmp5[3][3];
 
-  MathExtra::times3(sym_cell, tensor, tmp0);
+  MathExtra::times3(cell, tensor, tmp0);
   MathExtra::times3(tmp0, t_cell, tmp1);
 
   double sym_tensor[3][3];
@@ -710,8 +744,8 @@ void FixBoxRelaxSymmetry::symmetrize_rank2(double tensor[3][3]) {
     }
 
     MathExtra::transpose3(R, Rt);
-    MathExtra::times3(tmp1, Rt, tmp2);
-    MathExtra::times3(R, tmp2, tmp3);
+    MathExtra::times3(Rt, tmp1, tmp2);
+    MathExtra::times3(tmp2, R, tmp3);
 
     for (int i = 0; i < 3; i++) {
       sym_tensor[i][0] += tmp3[i][0];
@@ -727,6 +761,6 @@ void FixBoxRelaxSymmetry::symmetrize_rank2(double tensor[3][3]) {
     tmp4[i][2] = sym_tensor[i][2] / nsym;
   }
 
-  MathExtra::times3(inv_sym_cell, tmp4, tmp5);
+  MathExtra::times3(inv_cell, tmp4, tmp5);
   MathExtra::times3(tmp5, t_inv_cell, tensor);
 }

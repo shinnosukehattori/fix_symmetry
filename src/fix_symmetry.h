@@ -37,12 +37,9 @@ class FixSymmetry : public Fix {
   double symprec;  // Tolerance for position displacement
   bool symcell;   // Symmetrize cell
   bool symposs;  // Symmetrize position
-  bool symforce;   // Symmetrize forces
-  bool symstress;  // Symmetrize stress
   bool debug;
 
   double sym_cell[3][3];
-  double inv_sym_cell[3][3];
   double prim_cell[3][3];
 
   double ***rotation_matrices;
@@ -60,13 +57,14 @@ class FixSymmetry : public Fix {
   // Symmetrization functions
   int get_index(std::vector<int> &vec, int val);
   void get_cell(double cell[3][3]);
+  void get_cell(double cell[3][3], double inv_cell[3][3]);
   void set_cell(double cell[3][3]);
   void save_prev_position();
 
   void adjust_cell();
-  void adjust_positions();
-  void adjust_forces();
-  void adjust_stress();
+  void adjust_positions(double cell[3][3], double inv_cell[3][3]);
+  void adjust_forces(double cell[3][3], double inv_cell[3][3]);
+  void adjust_stress(double cell[3][3], double inv_cell[3][3]);
 
   void print_symmetry(int);
   void refine_symmetry();
@@ -77,8 +75,8 @@ class FixSymmetry : public Fix {
   void prep_symmetry();
   void check_symmetry(bool, bool);
 
-  void symmetrize_rank1(std::vector<double[3]> &vec);
-  void symmetrize_rank2(double vec[3][3]);
+  void symmetrize_rank1(std::vector<double[3]> &vec, double cell[3][3], double inv_cell[3][3]);
+  void symmetrize_rank2(double vec[3][3], double cell[3][3], double inv_cell[3][3]);
 
 };
 

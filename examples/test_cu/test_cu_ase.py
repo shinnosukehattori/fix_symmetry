@@ -3,8 +3,9 @@ from ase import Atoms
 #from ase.build import bulk
 from ase.io import read
 from ase.calculators.eam import EAM
-from ase.constraints import FixSymmetry
-from ase.optimize import LBFGS
+from ase.calculators.emt import EMT
+from ase.constraints import FixSymmetry, ExpCellFilter
+from ase.optimize import LBFGS, FIRE
 from ase.io import write
 from ase.spacegroup.symmetrize import check_symmetry
 
@@ -15,6 +16,7 @@ if not os.path.isfile(eam_potential_file):
     raise FileNotFoundError("eam_potential_file not found")
 
 calc_eam = EAM(potential=eam_potential_file, elements=['Cu'])
+calc_emt = EMT()
 
 lat = 10.0
 cu4 = Atoms(symbols=['Cu']*4, positions=[(0, 0, 0), (2.5, 0.0, 0.0), (2.5, 5.0, 0.0), (5.0, 5.0, 0.0)], pbc=True)
@@ -28,7 +30,7 @@ cu4.cell = [[lat, 0, 0], [0, lat, 0], [0, 0, lat]]
 cubulk = read('cu32.dat', format='lammps-data')
 cubulk.symbols = ['Cu']*32
 print(cubulk.cell.cellpar())
-cubulk.cell *= 1.1
+#cubulk.cell *= 1.1
 # -------------------------------
 # Main script
 # -------------------------------
@@ -57,6 +59,7 @@ def optimize_with_fix_symmetry(atoms, calc,
     # Apply FixSymmetry to maintain symmetry
     constraint = FixSymmetry(atoms, symprec=1e-4)
     atoms.set_constraint(constraint)
+    ecf = ExpCellFilter(atoms)
     
     # remove logfile and output_structure if they exist
     if os.path.exists(logfile):
@@ -65,7 +68,8 @@ def optimize_with_fix_symmetry(atoms, calc,
         os.remove(output_structure)
         
     # Structure optimization (BFGS method)
-    opt = LBFGS(atoms, logfile=logfile)
+    opt = LBFGS(ecf, logfile=logfile)
+    #opt = FIRE(atoms, a=0.1, logfile=logfile)
     opt.attach(lambda: save_xyz(atoms, opt.nsteps, output_structure), interval=1)
     opt.attach(lambda: custom_log_function(opt), interval=1)
 
@@ -87,5 +91,5 @@ def optimize_with_fix_symmetry(atoms, calc,
 
 if __name__ == '__main__':
     #optimize_with_fix_symmetry(cu4, calc_eam)
-    optimize_with_fix_symmetry(cubulk, calc_eam)
+    optimize_with_fix_symmetry(cubulk, calc_emt)
 

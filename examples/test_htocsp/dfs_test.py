@@ -7,6 +7,7 @@ from time import time
 import os
 from pyxtal.optimize import DFS
 from pyxtal.optimize.common import randomizer
+from pyxtal.interface.charmm import CHARMM
 from pyocse.lmp.pyxtal_calculator import LMP
 from pyocse.parameters import ForceFieldParameters
 exe = "/home/shattori/app/lammps_build/mylammps/build_fix_symmetry/lmp"
@@ -24,8 +25,13 @@ def myoptimizer(
     cwd = os.getcwd()
     t0 = time()
     os.chdir(workdir)
-    calc = LMP(struc, atom_info=atom_info, label=tag, exe=exe)
+
+    chm_atom_info, lmp_atom_info = atom_info
+    calc = LMP(struc, atom_info=lmp_atom_info, label=tag, exe=exe)
     calc.run(clean=False)
+    #calc_chm = CHARMM(struc, steps=[1000,1000], atom_info=chm_atom_info, label=tag)
+    #calc_chm.run(clean=False)
+
     os.chdir(cwd)
 
     results = {}
@@ -33,10 +39,10 @@ def myoptimizer(
     results["energy"] = calc.structure.energy
     results["time"] = time() - t0
     return results
-        
 
 
-        
+
+
 if __name__ == "__main__":
     import argparse
     import os
@@ -45,7 +51,7 @@ if __name__ == "__main__":
 
     calculator = LMP
     calculator.exe = exe
-    
+
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "-g",
@@ -75,7 +81,8 @@ if __name__ == "__main__":
     ffopt = options.ffopt
     #db_name, name = "test.db", "ACSALA" #please copy from pyxtal repo
     #db_name, name = "test.db", "DURNAH" #please copy from pyxtal repo
-    db_name, name = "test.db", "ACSALA" #please copy from pyxtal repo
+    db_name, name = "test.db", "JAYDUI" #please copy from pyxtal repo
+
     wdir = name
     os.makedirs(wdir, exist_ok=True)
     os.makedirs(wdir + "/calc", exist_ok=True)
@@ -105,7 +112,7 @@ if __name__ == "__main__":
                 self.smiles,
                 self.block,
                 self.num_block,
-                self.direct_atominfo, #params instead of atom_info oself.atom_info,
+                (self.atom_info, self.direct_atominfo), #params instead of atom_info self.atom_info,
                 self.workdir + "/" + "calc",
                 self.sg,
                 self.composition,
@@ -121,6 +128,7 @@ if __name__ == "__main__":
                 self.check_stable,
             ]
             return args
+    #go = DFS(
     go = myDFS(
         smile,
         wdir,

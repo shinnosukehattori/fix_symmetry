@@ -12,7 +12,7 @@ atom_style      atomic
 #create_atoms    1 box
 
 read_data       cu32.dat
-change_box all x scale 1.1 y scale 1.1 z scale 1.1
+#change_box all x scale 1.1 y scale 1.1 z scale 1.1
 
 mass            1 63.546  # Mass of Copper
 
@@ -27,8 +27,8 @@ thermo_style custom step temp vol press etotal pe ke cella cellb cellc cellalpha
 
 # Apply FixSymmetry with space group number 215
 # and a tolerance of 1e-5
-#fix             sym all symmetry 1e-4 false false true true true
-fix             sym all symmetry 1e-5 true true true true true
+#fix             sym all symmetry 1e-4 false false true
+fix             sym all symmetry 1e-5 true false true
 
 
 # Set up minimization
