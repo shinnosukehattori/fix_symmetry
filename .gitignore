@@ -2,6 +2,7 @@ examples/test_pyocse*/Minimize_*
 examples/test_htocsp/*/
 examples/test_htocsp/pyxtal_calculator.py
 examples/compressive_test
+examples/error*
 test.db
 loginfo
 pyxtal.prm
