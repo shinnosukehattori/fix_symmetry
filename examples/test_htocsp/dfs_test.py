@@ -14,30 +14,44 @@ exe = "/home/shattori/app/lammps_build/mylammps/build_fix_symmetry/lmp"
 
 
 def myoptimizer(
-    struc,
+    struc0,
     atom_info,
     workdir,
     tag = "job_0",
     opt_lat = True,
     max_time = 180,
-    skip_ani = False,
+    skip_ani = True,
 ):
     cwd = os.getcwd()
     t0 = time()
     os.chdir(workdir)
 
+    v0 = struc0.lattice.volume
+    struc = struc0.copy()
     chm_atom_info, lmp_atom_info = atom_info
     calc = LMP(struc, atom_info=lmp_atom_info, label=tag, exe=exe)
     calc.run(clean=False)
-    #calc_chm = CHARMM(struc, steps=[1000,1000], atom_info=chm_atom_info, label=tag)
-    #calc_chm.run(clean=False)
-
-    os.chdir(cwd)
 
     results = {}
     results["xtal"] = calc.structure
     results["energy"] = calc.structure.energy
     results["time"] = time() - t0
+
+    v_lmp = calc.structure.lattice.volume
+
+    #comapare  with CHARMM
+    #struc = struc0.copy()
+    #t0 = time()
+    #calc_chm = CHARMM(struc, steps=[1000,1000], atom_info=chm_atom_info, label=tag)
+    #calc_chm.run(clean=False)
+    #v_chm = calc_chm.structure.lattice.volume
+
+    #print("V0:", v0, " LMP:", v_lmp, " CHARMM:", v_chm)
+    #print("Eopt LMP:", results["energy"], " CHARMM:", calc_chm.structure.energy)
+    #print("time LMP:", results["time"], " CHARMM:", time() - t0)
+
+    os.chdir(cwd)
+
     return results
 
 
@@ -79,9 +93,9 @@ if __name__ == "__main__":
     pop = options.pop
     ncpu = options.ncpu
     ffopt = options.ffopt
-    #db_name, name = "test.db", "ACSALA" #please copy from pyxtal repo
+    db_name, name = "test.db", "ACSALA" #please copy from pyxtal repo
     #db_name, name = "test.db", "DURNAH" #please copy from pyxtal repo
-    db_name, name = "test.db", "JAYDUI" #please copy from pyxtal repo
+    #db_name, name = "test.db", "JAYDUI" #please copy from pyxtal repo
 
     wdir = name
     os.makedirs(wdir, exist_ok=True)
