@@ -96,7 +96,7 @@ if __name__ == "__main__":
         lmp_struc.write_lammps()
 
         additional_lmpcmds = """
-fix 1 all symmetry 5e-5 false false true true true 
+fix 1 all symmetry 5e-5 
 min_style       cg
 minimize 1e-5 0 20 20
 
@@ -108,7 +108,7 @@ minimize 1e-6 1e-6 500 500
         """
         additional_lmpcmds_box = """
 min_style cg
-fix 1 all symmetry 5e-5 false false true true
+fix 1 all symmetry 5e-5 
 minimize 1e-5 1e-5 20 20
 
 unfix 1

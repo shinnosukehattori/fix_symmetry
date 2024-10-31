@@ -93,9 +93,9 @@ if __name__ == "__main__":
     pop = options.pop
     ncpu = options.ncpu
     ffopt = options.ffopt
-    db_name, name = "test.db", "ACSALA" #please copy from pyxtal repo
+    #db_name, name = "test.db", "ACSALA" #please copy from pyxtal repo
     #db_name, name = "test.db", "DURNAH" #please copy from pyxtal repo
-    #db_name, name = "test.db", "JAYDUI" #please copy from pyxtal repo
+    db_name, name = "test.db", "JAYDUI" #please copy from pyxtal repo
 
     wdir = name
     os.makedirs(wdir, exist_ok=True)
