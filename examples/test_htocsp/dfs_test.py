@@ -7,11 +7,27 @@ from time import time
 import os
 from pyxtal.optimize import DFS
 from pyxtal.optimize.common import randomizer
-from pyxtal.interface.charmm import CHARMM
 from pyocse.lmp.pyxtal_calculator import LMP
 from pyocse.parameters import ForceFieldParameters
 exe = "/home/shattori/app/lammps_build/mylammps/build_fix_symmetry/lmp"
 
+def lattice_cut_and_rotate(xtal, cut=2.0, ncut=3, verbose=False):
+    if verbose:
+        xtal.to_file('init.cif')
+        print(xtal.get_separations([[1, 0, 0], [0, 1, 0], [0, 0, 1]]))
+        print(xtal)
+    for i in range(ncut): 
+        xtal.cut_lattice(cut, True)
+        if verbose:
+            print(xtal.get_separations([[1, 0, 0], [0, 1, 0], [0, 0, 1]]))
+            print(xtal)
+            xtal.to_file(f'cut_{i}.cif')
+
+    for site in xtal.mol_sites:
+        site.optimize_orientation_by_energy(20, verbose=verbose)
+    if verbose:
+        xtal.to_file('opt.cif')
+    return xtal
 
 def myoptimizer(
     struc0,
@@ -27,7 +43,9 @@ def myoptimizer(
     os.chdir(workdir)
 
     v0 = struc0.lattice.volume
-    struc = struc0.copy()
+    struc_opt = lattice_cut_and_rotate(struc0, cut=2.0, ncut=3, verbose=False)
+    vopt = struc_opt.lattice.volume
+    struc = struc_opt.copy()
     chm_atom_info, lmp_atom_info = atom_info
     calc = LMP(struc, atom_info=lmp_atom_info, label=tag, exe=exe)
     calc.run(clean=False)
@@ -38,6 +56,8 @@ def myoptimizer(
     results["time"] = time() - t0
 
     v_lmp = calc.structure.lattice.volume
+
+    print("V0:", v0, "Vopt:", vopt, "LMP:", v_lmp)
 
     #comapare  with CHARMM
     #struc = struc0.copy()
@@ -72,7 +92,7 @@ if __name__ == "__main__":
         "--gen",
         dest="gen",
         type=int,
-        default=1,
+        default=5,
         help="Number of generation, optional",
     )
     parser.add_argument(
@@ -80,7 +100,7 @@ if __name__ == "__main__":
         "--pop",
         dest="pop",
         type=int,
-        default=1,
+        default=5,
         help="Population size, optional",
     )
     parser.add_argument("-n", "--ncpu", dest="ncpu", type=int,
@@ -93,9 +113,9 @@ if __name__ == "__main__":
     pop = options.pop
     ncpu = options.ncpu
     ffopt = options.ffopt
-    #db_name, name = "test.db", "ACSALA" #please copy from pyxtal repo
+    db_name, name = "test.db", "ACSALA" #please copy from pyxtal repo
     #db_name, name = "test.db", "DURNAH" #please copy from pyxtal repo
-    db_name, name = "test.db", "JAYDUI" #please copy from pyxtal repo
+    #db_name, name = "test.db", "JAYDUI" #please copy from pyxtal repo
 
     wdir = name
     os.makedirs(wdir, exist_ok=True)
