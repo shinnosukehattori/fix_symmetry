@@ -11,7 +11,7 @@ from pyocse.lmp.pyxtal_calculator import LMP
 from pyocse.parameters import ForceFieldParameters
 exe = "/home/shattori/app/lammps_build/mylammps/build_fix_symmetry/lmp"
 
-def lattice_cut_and_rotate(xtal, cut=2.0, ncut=3, verbose=False):
+def lattice_cut_and_rotate(xtal, cut=2.0, ncut=3, do_rotation=True, verbose=False):
     if verbose:
         xtal.to_file('init.cif')
         print(xtal.get_separations([[1, 0, 0], [0, 1, 0], [0, 0, 1]]))
@@ -23,10 +23,11 @@ def lattice_cut_and_rotate(xtal, cut=2.0, ncut=3, verbose=False):
             print(xtal)
             xtal.to_file(f'cut_{i}.cif')
 
-    for site in xtal.mol_sites:
-        site.optimize_orientation_by_energy(20, verbose=verbose)
-    if verbose:
-        xtal.to_file('opt.cif')
+    if do_rotation:
+        for site in xtal.mol_sites:
+            site.optimize_orientation_by_energy(20, verbose=verbose)
+        if verbose:
+            xtal.to_file('rotopt.cif')
     return xtal
 
 def myoptimizer(
@@ -43,7 +44,7 @@ def myoptimizer(
     os.chdir(workdir)
 
     v0 = struc0.lattice.volume
-    struc_opt = lattice_cut_and_rotate(struc0, cut=2.0, ncut=3, verbose=False)
+    struc_opt = lattice_cut_and_rotate(struc0, cut=2.0, ncut=3, do_rotation=False, verbose=False)
     vopt = struc_opt.lattice.volume
     struc = struc_opt.copy()
     chm_atom_info, lmp_atom_info = atom_info
@@ -113,9 +114,9 @@ if __name__ == "__main__":
     pop = options.pop
     ncpu = options.ncpu
     ffopt = options.ffopt
-    db_name, name = "test.db", "ACSALA" #please copy from pyxtal repo
+    #db_name, name = "test.db", "ACSALA" #please copy from pyxtal repo
     #db_name, name = "test.db", "DURNAH" #please copy from pyxtal repo
-    #db_name, name = "test.db", "JAYDUI" #please copy from pyxtal repo
+    db_name, name = "test.db", "JAYDUI" #please copy from pyxtal repo
 
     wdir = name
     os.makedirs(wdir, exist_ok=True)
