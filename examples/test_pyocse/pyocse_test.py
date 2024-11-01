@@ -73,13 +73,16 @@ if __name__ == "__main__":
         os.chdir(wdir)
 
         
-        xtal = db.get_pyxtal(code)
-        print(code, xtal.group.number, xtal.has_special_site(), xtal.get_zprime())
+        xtal0 = db.get_pyxtal(code)
+        print(code, xtal0.group.number, xtal0.has_special_site(), xtal0.get_zprime())
 
         # for charmm
         row = db.get_row(code)
-        if xtal.has_special_site():
-            xtal = xtal.to_subgroup()
+        if xtal0.has_special_site():
+            xtal0 = xtal0.to_subgroup()
+
+        xtal = xtal0.copy()
+
         chm_info = row.data["charmm_info"]
         with open("pyxtal.prm", "w") as prm:
             prm.write(chm_info["prm"])
@@ -90,7 +93,7 @@ if __name__ == "__main__":
         print(code, "SG=",chm.structure.group.number, ",CHM:E=", chm.structure.energy, ",LAT=", chm.structure.lattice, ", @", chm.cputime)
 
         # for lammps
-        xtal = db.get_pyxtal(code)
+        xtal = xtal0.copy()
         params = ForceFieldParameters([mol.smile for mol in xtal.molecules], style=style, chargemethod=chargemethod)
         lmp_struc, _ = params.get_lmp_input_from_structure(xtal.to_ase(resort=False), xtal.numMols)
         lmp_struc.write_lammps()

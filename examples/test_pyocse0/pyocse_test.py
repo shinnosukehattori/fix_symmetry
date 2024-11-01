@@ -5,17 +5,6 @@ import os
 import lammps_logfile
 
 
-def lattice_cut_and_rotate(xtal, cut=2.0, verbose=False):
-    xtal.to_file('init.cif')
-    xtal.cut_lattice(cut, True)
-    print(xtal)
-    xtal.cut_lattice(cut, True)
-    print(xtal)
-    for site in xtal.mol_sites:
-        site.optimize_orientation_by_energy(100, verbose=verbose)
-    xtal.to_file('opt.cif')
-    return xtal
-
 def lammps_read(fname, sym_pos=-1):
 
     log = lammps_logfile.File(fname)
@@ -76,8 +65,6 @@ if __name__ == "__main__":
         os.chdir(wdir)
 
         xtal = db.get_pyxtal(code)
-        xtal = lattice_cut_and_rotate(xtal, cut=2.0, verbose=False)
-        print(code, xtal.group.number)
 
         # for charmm
         row = db.get_row(code)

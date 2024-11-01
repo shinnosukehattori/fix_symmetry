@@ -6,20 +6,19 @@ import subprocess
 import lammps_logfile
 import os
 
-def lattice_cut_and_rotate(xtal, cut=2.0, ncut=3, verbose=False):
+def lattice_cut_and_rotate(xtal, cut=2.0, ncut=10, verbose=False):
     xtal.to_file('init.cif')
     if verbose:
         print(xtal.get_separations([[1, 0, 0], [0, 1, 0], [0, 0, 1]]))
         print(xtal)
-    for i in range(ncut): 
+    for i in range(ncut):
         xtal.cut_lattice(cut, True)
         if verbose:
             print(xtal.get_separations([[1, 0, 0], [0, 1, 0], [0, 0, 1]]))
             print(xtal)
-    xtal.to_file('cut.cif')
 
-    for site in xtal.mol_sites:
-        site.optimize_orientation_by_energy(20, verbose=verbose)
+        for site in xtal.mol_sites:
+            site.optimize_orientation_by_energy(verbose=verbose)
     xtal.to_file('opt.cif')
     return xtal
 
@@ -61,18 +60,20 @@ def lammps_read(fname, sym_pos=-1):
 if __name__ == "__main__":
     style = 'openff'
     chargemethod = 'am1bcc'
-    asp = pyxtal_molecule('CC(=O)OC1=CC=CC=C1C(=O)O.smi', active_sites=[(11), (12)])
+    asp = pyxtal_molecule('CC(=O)OC1=CC=CC=C1C(=O)O.smi', active_sites=[[11], [12],[20]])
 
-    n_trial = 10
+    n_trial = 1
     for trial in range(n_trial):
         wdir = "Minimize_LMPSYM_random_ASP_" + str(trial)
         print("Start: ", wdir)
         os.makedirs(wdir, exist_ok=True)
         os.chdir(wdir)
-        xtal = pyxtal(molecular=True)
-        xtal.from_random(3, 14, [asp], sites=[["4e"]])
-        xtal = lattice_cut_and_rotate(xtal, cut=2.0, verbose=False)
-        #xtal = lattice_cut_and_rotate(xtal, cut=2.0, verbose=True)
+        xtal0 = pyxtal(molecular=True)
+        xtal0.from_random(3, 14, [asp], sites=[["4e"]])
+        print(xtal0)
+
+        xtal0 = lattice_cut_and_rotate(xtal0, cut=2.0, verbose=False)
+        xtal = xtal0.copy()
 
         if xtal.has_special_site():
             xtal = xtal.to_subgroup()
@@ -89,6 +90,7 @@ if __name__ == "__main__":
         chm.run(clean=False)
         print("SG=",chm.structure.group.number, ",CHM:E=", chm.structure.energy, ",LAT=", chm.structure.lattice, ", @", chm.cputime)
 
+        xtal = xtal0.copy()
         lmp_struc, _ = params.get_lmp_input_from_structure(xtal.to_ase(resort = False), xtal.numMols, set_template=False)
         lmp_struc.write_lammps(fin="pyxtal.in", fdat="pyxtal.dat")
 
@@ -115,6 +117,35 @@ unfix 2
 fix 2 all box/relax/symmetry symprec 5e-5 tri 0.0001 vmax 0.0001
 minimize 1e-6 1e-6 500 500
         """
+        additional_lmpcmds_box = """
+variable vmax equal 0.005
+variable ptarget equal 1000
+min_style cg
+
+fix br all symmetry 1e-4
+minimize 0 1e-4 200 200 #1
+
+unfix br
+fix  br all box/relax/symmetry symprec 1e-4 x 1 y ${ptarget} z 1 xz 1 vmax ${vmax} fixedpoint 0 0 0 nreset 50
+minimize 0 1e-4 500 500 #3
+
+unfix br
+fix  br all box/relax/symmetry symprec 1e-4 x ${ptarget} y 1 z ${ptarget} xz ${ptarget} vmax ${vmax} fixedpoint 0 0 0 nreset 50
+minimize 0 1e-4 500 500 #3
+
+unfix br
+fix br all box/relax/symmetry symprec  1e-4 x 1 y 1 z 1 xz ${ptarget} vmax ${vmax} fixedpoint 0 0 0 nreset 50
+minimize 0 1e-6 500 500 #5
+
+unfix br
+fix br all box/relax/symmetry symprec 1e-4 symcell false symposs false x 1 y 1 z 1 xz 1 vmax ${vmax} fixedpoint 0 0 0 nreset 50
+minimize 0 1e-6 500 500 #5
+
+unfix br
+fix br all symmetry 1e-4 false false
+minimize 0 1e-6 200 200 #2
+        """
+
         lmpintxt = open('pyxtal.in').read()
         lmpintxt = lmpintxt.replace("custom step ", "custom step spcpu ")
         lmpintxt = lmpintxt.replace("#compute ", "compute ")
