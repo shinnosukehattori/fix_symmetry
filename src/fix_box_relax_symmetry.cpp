@@ -27,9 +27,9 @@ using namespace LAMMPS_NS;
 ARGRemover::ARGRemover(LAMMPS *lmp, int narg, char **arg) {
   narg_new = 0;
   arg_new = nullptr;
-  symprec = 1e-4;
+  symprec = 5e-4;
   symcell = true;
-  symposs = false;
+  symposs = true;
   debug = false;
 
   //save original arguments and copy and remove the arguments 
@@ -100,6 +100,7 @@ FixBoxRelaxSymmetry::FixBoxRelaxSymmetry(LAMMPS *lmp, int narg, char **arg) : AR
 
   // Initialize previous positions array
   prev_positions = nullptr;
+  prev_image = nullptr;
   all_positions = nullptr;
   all_types = nullptr;
   rotation_matrices = nullptr;
@@ -110,6 +111,7 @@ FixBoxRelaxSymmetry::FixBoxRelaxSymmetry(LAMMPS *lmp, int narg, char **arg) : AR
 FixBoxRelaxSymmetry::~FixBoxRelaxSymmetry() {
   // Free memory
   memory->destroy(prev_positions);
+  memory->destroy(prev_image);
   memory->destroy(all_positions);
   memory->destroy(all_types);
   memory->destroy(rotation_matrices);
@@ -148,7 +150,7 @@ void FixBoxRelaxSymmetry::setup_pre_force(int vflag) {
       sym_cell[i][j] = cell[i][j];
     }
   }
-  if(symposs) save_prev_position();
+  if(symposs) save_prev_info();
 }
 
 double FixBoxRelaxSymmetry::min_energy(double *fextra) {
@@ -165,15 +167,16 @@ double FixBoxRelaxSymmetry::min_energy(double *fextra) {
 
   if(symposs){
     adjust_positions(cell, inv_cell);
-    save_prev_position();
+    save_prev_info();
   }
+
+  if(debug) check_symmetry(false, false, false);
   return energy;
 }
 
 
 void FixBoxRelaxSymmetry::post_run() {
-  store_all_coordinates();
-  check_symmetry(true, false);
+  check_symmetry(true, false, false);
 }
 
 int FixBoxRelaxSymmetry::get_index(std::vector<int> &vec, int val) {
@@ -230,17 +233,36 @@ void FixBoxRelaxSymmetry::set_cell(double cell[3][3]) {
   domain->set_local_box();
 }
 
-void FixBoxRelaxSymmetry::save_prev_position() {
+void FixBoxRelaxSymmetry::unmap_inv(double cell[3][3], double *x, imageint image)
+{
+  int xbox = (image & IMGMASK) - IMGMAX;
+  int ybox = (image >> IMGBITS & IMGMASK) - IMGMAX;
+  int zbox = (image >> IMG2BITS) - IMGMAX;
 
+  x[0] -= cell[0][0]*xbox + cell[1][0]*ybox + cell[2][0]*zbox;
+  x[1] -= cell[1][1]*ybox + cell[2][1]*zbox;
+  x[2] -= cell[2][2]*zbox;
+}
+
+void FixBoxRelaxSymmetry::save_prev_info() {
+
+  int nlocal = atom->nlocal;
   if (prev_positions != nullptr || 3*atom->nlocal != sizeof(prev_positions)) {
     memory->destroy(prev_positions);
+    memory->destroy(prev_image);
   }
   if (prev_positions == nullptr) {
     memory->create(prev_positions, atom->nlocal, 3, "fix_box_relax_symmetry:prev_positions");
+    memory->create(prev_image, atom->nlocal, "fix_box_relax_symmetry:prev_image");
   }
+  domain->x2lamda(nlocal);
   for (int i = 0; i < atom->nlocal; i++) {
-    domain->unmap(atom->x[i], atom->image[i], prev_positions[i]);
+    prev_positions[i][0] = atom->x[i][0];
+    prev_positions[i][1] = atom->x[i][1];
+    prev_positions[i][2] = atom->x[i][2];
+    prev_image[i] =  atom->image[i];
   }
+  domain->lamda2x(nlocal);
 }
 
 void FixBoxRelaxSymmetry::adjust_cell() {
@@ -307,13 +329,18 @@ void FixBoxRelaxSymmetry::adjust_positions(double cell[3][3], double inv_cell[3]
   imageint *image = atom->image;
   int nlocal = atom->nlocal;
 
+  std::vector<double[3]> ppos(nlocal);
   std::vector<double[3]> step(nlocal);
   for (int i = 0; i < nlocal; i++) {
     double pos[3];
+    double tmp[3];
+    domain->lamda2x(prev_positions[i], tmp);
+    domain->unmap(tmp, prev_image[i], ppos[i]);
     domain->unmap(x[i], image[i], pos);
-    step[i][0] = pos[0] - prev_positions[i][0];
-    step[i][1] = pos[1] - prev_positions[i][1];
-    step[i][2] = pos[2] - prev_positions[i][2];
+
+    step[i][0] = pos[0] - ppos[i][0];
+    step[i][1] = pos[1] - ppos[i][1];
+    step[i][2] = pos[2] - ppos[i][2];
   }
 
   // Symmetrize Positions
@@ -321,10 +348,26 @@ void FixBoxRelaxSymmetry::adjust_positions(double cell[3][3], double inv_cell[3]
 
   // Update 
   for (int i = 0; i < nlocal; i++) {
-    x[i][0] = prev_positions[i][0] + step[i][0];
-    x[i][1] = prev_positions[i][1] + step[i][1];
-    x[i][2] = prev_positions[i][2] + step[i][2];
-    domain->unmap_inv(x[i], image[i]);
+    x[i][0] = ppos[i][0] + step[i][0];
+    x[i][1] = ppos[i][1] + step[i][1];
+    x[i][2] = ppos[i][2] + step[i][2];
+    unmap_inv(cell, x[i], prev_image[i]);
+    image[i] = prev_image[i];
+  }
+
+  for (int i = 0; i < nlocal; i++) {
+    double th = 0.1;
+    if (std::abs(step[i][0]) > th || 
+        std::abs(step[i][1]) > th || 
+        std::abs(step[i][2]) > th) {
+        printf("Too large displacement in FixSymmetry::adjust_positions\n");
+        printf("dx[%d] = %5.3f+(%5.3f)>%5.3f,%5.3f+(%5.3f)>%5.3f,%5.3f+(%5.3f)>%5.3f\n", i,
+                ppos[i][0], step[i][0], x[i][0],
+                ppos[i][1], step[i][1], x[i][1],
+                ppos[i][2], step[i][2], x[i][2]
+              );
+    }
+    //domain->remap(x[i], image[i]);
   }
 }
 
@@ -374,30 +417,30 @@ void FixBoxRelaxSymmetry::adjust_stress(double cell[3][3], double inv_cell[3][3]
   stress[5] = stress_tensor[0][1];
 }
 
-void FixBoxRelaxSymmetry::print_symmetry(int prev) {
+void FixBoxRelaxSymmetry::print_symmetry(SpglibDataset *ds, int prev, bool override) {
   std::ostringstream message;
   message  << "[SymBox]"
-           << "SG: " << dataset->spacegroup_number;
+           << "SG: " << ds->spacegroup_number;
   if (prev >= 0) {
-     message << " (" << prev << ")";
+     message << " (baseSG=" << prev;
+     if (override) message << " -> " << ds->spacegroup_number;
+     message << ")";
   }
   message << " Prec.: " << symprec
-          << " SymNops: " << dataset->n_operations
-          << " Int.Symbol: " << dataset->international_symbol
-          << " HallSymbol: " << dataset->hall_symbol << std::endl;
+          << " SymNops: " << ds->n_operations
+          << " Int.Symbol: " << ds->international_symbol
+          << " HallSymbol: " << ds->hall_symbol << std::endl;
   if(comm->me == 0) utils::logmesg(lmp, message.str());
 }
 
 void FixBoxRelaxSymmetry::refine_symmetry() {
   //check_and_symmetrize_cell
-  store_all_coordinates();
-  check_symmetry(true, false);
+  check_symmetry(true, true, false);
   symmetrize_cell();
-  check_symmetry(false, true); //use symmetrized cell and find primitive
+  check_symmetry(false, false, true); //use symmetrized cell and find primitive
   symmetrize_positions();
 
-  store_all_coordinates();
-  check_symmetry(false, false);
+  check_symmetry(false, false, false);
   return;
 }
 
@@ -415,7 +458,15 @@ void FixBoxRelaxSymmetry::symmetrize_cell() {
   utils::logmesg(lmp, "Symmetrized Cell Matrix = ");
   for (int i = 0; i < 3; i++) {
     for (int j = 0; j < 3; j++) {
-      std::string message = fmt::format("{:f},", cell[i][j]);
+      std::string message = fmt::format("{:5.3f},", cell[i][j]);
+      utils::logmesg(lmp, message);
+    }
+  }
+  utils::logmesg(lmp, "\n");
+  utils::logmesg(lmp, "Std Cell Matrix (ini) = ");
+  for (int i = 0; i < 3; i++) {
+    for (int j = 0; j < 3; j++) {
+      std::string message = fmt::format("{:5.3f}, ", std_cell[i][j]);
       utils::logmesg(lmp, message);
     }
   }
@@ -514,7 +565,6 @@ void FixBoxRelaxSymmetry::store_all_coordinates() {
   int *type = atom->type;
   double **x = atom->x;
 
-  if (debug) printf("Store all coordinates: :natoms = %d, nlocal = %d\n", natoms, nlocal);
   if (all_positions) delete [] all_positions;
   if (all_types) memory->destroy(all_types);
 
@@ -544,28 +594,33 @@ void FixBoxRelaxSymmetry::store_all_coordinates() {
   //MPI_Allreduce(MPI_IN_PLACE, all_types, natoms, MPI_INT, MPI_SUM, world);
 }
 
-void FixBoxRelaxSymmetry::check_symmetry(bool do_print, bool do_find_prim) {
+void FixBoxRelaxSymmetry::check_symmetry(bool do_print, bool override, bool do_find_prim) {
 
   int natoms = atom->natoms;
 
   double cell[3][3];
   double t_cell[3][3];
+
+  store_all_coordinates();
   get_cell(cell);
   MathExtra::transpose3(cell, t_cell);
 
-  if (dataset) spg_free_dataset(dataset);
-  dataset = spg_get_dataset(t_cell, (const double (*)[3])all_positions, all_types, natoms, symprec);
+  SpglibDataset *tds = spg_get_dataset(t_cell, (const double (*)[3])all_positions, all_types, natoms, symprec);
 
-  if (dataset == nullptr) {
+  if (tds == nullptr) {
     std::string spg_error_msg = spg_get_error_message(spg_get_error_code());
     error->all(FLERR, spg_error_msg.c_str());
   }
 
   if ( do_print || spacegroup_number != dataset->spacegroup_number) {
-    print_symmetry(spacegroup_number);
+    print_symmetry(tds, spacegroup_number, override);
   }
 
-  spacegroup_number = dataset->spacegroup_number;
+  if (dataset == nullptr || override){
+    if (dataset) spg_free_dataset(dataset);
+    dataset = tds;
+    spacegroup_number = dataset->spacegroup_number;
+  }
 
   if (do_find_prim) {
     int find_prim = spg_find_primitive(t_cell, (double (*)[3])all_positions, all_types, natoms, symprec);

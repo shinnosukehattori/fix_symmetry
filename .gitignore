@@ -1,4 +1,5 @@
 examples/test_*/Minimize_*
+examples/dev*
 examples/test_htocsp/*/
 examples/test_htocsp/pyxtal_calculator.py
 examples/compressive_test

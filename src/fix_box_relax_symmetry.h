@@ -58,6 +58,8 @@ class FixBoxRelaxSymmetry : protected ARGRemover, public FixBoxRelax {
 
   SpglibDataset *dataset;
   double **prev_positions;
+  imageint *prev_image;
+
   double *all_positions;
   int *all_types;
 
@@ -69,21 +71,22 @@ class FixBoxRelaxSymmetry : protected ARGRemover, public FixBoxRelax {
   void get_cell(double cell[3][3]);
   void get_cell(double cell[3][3], double inv_cell[3][3]);
   void set_cell(double cell[3][3]);
-  void save_prev_position();
+  void save_prev_info();
+  void unmap_inv(double cell[3][3], double x[3], imageint image);
 
   void adjust_cell();
   void adjust_positions(double cell[3][3], double inv_cell[3][3]);
   void adjust_forces(double cell[3][3], double inv_cell[3][3]);
   void adjust_stress(double cell[3][3], double inv_cell[3][3]);
 
-  void print_symmetry(int);
+  void print_symmetry(SpglibDataset*, int, bool);
   void refine_symmetry();
   void symmetrize_cell();
   void symmetrize_positions();
 
   void store_all_coordinates();
   void prep_symmetry();
-  void check_symmetry(bool, bool);
+  void check_symmetry(bool, bool, bool);
 
   void symmetrize_rank1(std::vector<double[3]> &vec, double cell[3][3], double inv_cell[3][3]);
   void symmetrize_rank2(double vec[3][3], double cell[3][3], double inv_cell[3][3]);
