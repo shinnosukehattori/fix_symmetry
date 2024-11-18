@@ -33,6 +33,7 @@ class ARGRemover {
   double symprec;
   double symcell;
   double symposs;
+  double no_average;
   bool debug;
 };
 
@@ -89,6 +90,7 @@ class FixBoxRelaxSymmetry : protected ARGRemover, public FixBoxRelax {
   void check_symmetry(bool, bool, bool);
 
   void symmetrize_rank1(std::vector<double[3]> &vec, double cell[3][3], double inv_cell[3][3]);
+  void symmetrize_rank1(std::vector<double[3]> &vec, double cell[3][3], double inv_cell[3][3], int istart);
   void symmetrize_rank2(double vec[3][3], double cell[3][3], double inv_cell[3][3]);
 
 };

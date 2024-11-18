@@ -22,9 +22,10 @@ using namespace LAMMPS_NS;
 
 FixSymmetry::FixSymmetry(LAMMPS *lmp, int narg, char **arg) : Fix(lmp, narg, arg) {
 
-  symprec = 1e-4;  // Default tolerance
-  symcell = false;
+  symprec = 5e-4;  // Default tolerance
+  symcell = true;
   symposs = true;
+  no_average = false;
   debug = false;
 
   int proc_x = comm->procgrid[0];
@@ -36,14 +37,15 @@ FixSymmetry::FixSymmetry(LAMMPS *lmp, int narg, char **arg) : Fix(lmp, narg, arg
   }
 
 
-  if (narg < 3 || narg > 7)
+  if (narg < 3 || narg > 8)
     error->all(FLERR, "Illegal fix symmetry command. optional symprec, symcell, symforce, symstress and debug-mode.");
 
   // Get the tolerance (if not specified, set default value)
   if (narg >= 4) symprec = utils::numeric(FLERR, arg[3], false, lmp);
   if (narg >= 5) symcell = utils::logical(FLERR, arg[4], false, lmp);
   if (narg >= 6) symposs= utils::logical(FLERR, arg[5], false, lmp);
-  if (narg >= 7) debug = utils::logical(FLERR, arg[6], false, lmp);
+  if (narg >= 7) no_average= utils::logical(FLERR, arg[6], false, lmp);
+  if (narg >= 8) debug = utils::logical(FLERR, arg[7], false, lmp);
 
   for (int i = 0; i < 3; i++) {
     for (int j = 0; j < 3; j++) {
@@ -304,7 +306,11 @@ void FixSymmetry::adjust_positions(double cell[3][3], double inv_cell[3][3]) {
   }
 
   // Symmetrize Positions
-  symmetrize_rank1(step, cell, inv_cell);
+  if (no_average) {
+    symmetrize_rank1(step, cell, inv_cell, 0);
+  } else {
+    symmetrize_rank1(step, cell, inv_cell);
+  }
 
   // Update 
   for (int i = 0; i < nlocal; i++) {
@@ -327,7 +333,7 @@ void FixSymmetry::adjust_positions(double cell[3][3], double inv_cell[3][3]) {
                 ppos[i][2], step[i][2], x[i][2]
               );
     }
-    domain->remap(x[i], image[i]);
+    //domain->remap(x[i], image[i]);
   }
 }
 
@@ -660,6 +666,69 @@ void FixSymmetry::prep_symmetry() {
       this_op_map[i] = min_index;
     }
     symm_map.push_back(this_op_map);
+  }
+}
+
+void FixSymmetry::symmetrize_rank1(std::vector<double[3]> &vec, double cell[3][3], double inv_cell[3][3], int istart) {
+  int nlocal = atom->nlocal;
+  int nsym = dataset->n_operations;
+
+  std::vector<double[3]> scaled_vec(nlocal);
+
+  for (int i = 0; i < nlocal; i++) {
+    MathExtra::transpose_matvec(inv_cell, vec[i], scaled_vec[i]);
+  }
+
+  // Initialize symmetrized vectors
+  std::vector<double[3]> sym_vec(nlocal);
+  std::vector<double[3]> transformed_vec(nlocal);
+  std::vector<int> flag(nlocal);
+  std::vector<int> global2local(nlocal);
+  int tflag = 0;
+  for (int i = 0; i < nlocal; i++) {
+    sym_vec[i][0] = 0.0;
+    sym_vec[i][1] = 0.0;
+    sym_vec[i][2] = 0.0;
+    transformed_vec[i][0] = 0.0;
+    transformed_vec[i][1] = 0.0;
+    transformed_vec[i][2] = 0.0;
+    flag[i] = 0;
+    global2local[atom->tag[i] - 1] = i;
+  }
+
+  for (int x = istart; x < nlocal+istart; x++) {
+    if (x >= nlocal) {
+      x = x - nlocal;
+    }
+    int iglobal = atom->tag[x] - 1;
+    for (int k = 0; k < nsym; k++) {
+      int jglobal = symm_map[k][iglobal];
+      int j = global2local[jglobal];
+      if (flag[j] > 0)
+        continue;
+      double R[3][3];
+
+      for (int i = 0; i < 3; i++) {
+        for (int j = 0; j < 3; j++) {
+          R[i][j] = rotation_matrices[k][i][j];
+        }
+      }
+      for (int i = 0; i < nlocal; i++) {
+        MathExtra::matvec(R, scaled_vec[i], transformed_vec[i]);
+      }
+      sym_vec[j][0] += transformed_vec[x][0];
+      sym_vec[j][1] += transformed_vec[x][1];
+      sym_vec[j][2] += transformed_vec[x][2];
+      flag[j] = 1;
+      tflag += 1;
+    }
+
+    if (tflag >= nlocal) {
+      break;
+    }
+  }
+  for (int i = 0; i < nlocal; i++) {
+    MathExtra::matvec(cell, sym_vec[i], vec[i]);
   }
 }
 

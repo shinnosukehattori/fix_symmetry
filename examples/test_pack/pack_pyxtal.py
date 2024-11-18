@@ -94,55 +94,34 @@ if __name__ == "__main__":
         lmp_struc, _ = params.get_lmp_input_from_structure(xtal.to_ase(resort = False), xtal.numMols, set_template=False)
         lmp_struc.write_lammps(fin="pyxtal.in", fdat="pyxtal.dat")
 
-        additional_lmpcmds = """
-fix 1 all symmetry 5e-5
-min_style       cg
-minimize 1e-5 0 20 20
-
-fix 2 all box/relax aniso 0.0001 vmax 0.002
-minimize 0 1e-5 500 500
-unfix 2
-fix 2 all box/relax tri 0.0001 vmax 0.0001
-minimize 1e-6 1e-6 500 500
-        """
         additional_lmpcmds_box = """
+variable vmax equal 0.02
+variable ptarget equal 25000
+variable symprec equal 5e-4
 min_style cg
-fix 1 all symmetry 5e-5
-minimize 1e-5 1e-5 20 20
+min_modify dmax 0.02 line quadratic
 
-unfix 2
-fix 2 all box/relax/symmetry symprec 5e-5 aniso 0.0001 vmax 0.002
-minimize 1e-5 1e-5 500 500
-unfix 2
-fix 2 all box/relax/symmetry symprec 5e-5 tri 0.0001 vmax 0.0001
-minimize 1e-6 1e-6 500 500
-        """
-        additional_lmpcmds_box = """
-variable vmax equal 0.005
-variable ptarget equal 1000
-min_style cg
+fix br all symmetry ${symprec}
+minimize 1e-5 1e-4 500 500 #1
 
+unfix br
+fix  br all box/relax/symmetry symprec ${symprec} x ${ptarget} y ${ptarget} z ${ptarget} xz 1 vmax ${vmax} fixedpoint 0 0 0 nreset 50
+minimize 0 1e-4 500 500 #2
+
+unfix br
+fix  br all box/relax/symmetry symprec ${symprec} x 1 y ${ptarget} z 1 xz 1 vmax ${vmax} fixedpoint 0 0 0 nreset 50
+minimize 0 1e-4 500 500 #3
+
+unfix br
+fix  br all box/relax/symmetry symprec ${symprec} x ${ptarget} y 1 z ${ptarget} xz ${ptarget} vmax ${vmax} fixedpoint 0 0 0 nreset 50
+minimize 0 1e-4 500 500 #4
+
+unfix br
+fix br all box/relax/symmetry symprec  ${symprec} x 1 y 1 z 1 xz 1 vmax ${vmax} fixedpoint 0 0 0 nreset 50
+minimize 0 1e-6 500 500 #5
+
+unfix br
 fix br all symmetry 1e-4
-minimize 0 1e-4 200 200 #1
-
-unfix br
-fix  br all box/relax/symmetry symprec 1e-4 x 1 y ${ptarget} z 1 xz 1 vmax ${vmax} fixedpoint 0 0 0 nreset 50
-minimize 0 1e-4 500 500 #3
-
-unfix br
-fix  br all box/relax/symmetry symprec 1e-4 x ${ptarget} y 1 z ${ptarget} xz ${ptarget} vmax ${vmax} fixedpoint 0 0 0 nreset 50
-minimize 0 1e-4 500 500 #3
-
-unfix br
-fix br all box/relax/symmetry symprec  1e-4 x 1 y 1 z 1 xz ${ptarget} vmax ${vmax} fixedpoint 0 0 0 nreset 50
-minimize 0 1e-6 500 500 #5
-
-unfix br
-fix br all box/relax/symmetry symprec 1e-4 symcell false symposs false x 1 y 1 z 1 xz 1 vmax ${vmax} fixedpoint 0 0 0 nreset 50
-minimize 0 1e-6 500 500 #5
-
-unfix br
-fix br all symmetry 1e-4 false false
 minimize 0 1e-6 200 200 #2
         """
 
@@ -151,8 +130,9 @@ minimize 0 1e-6 200 200 #2
         lmpintxt = lmpintxt.replace("#compute ", "compute ")
         lmpintxt = lmpintxt.replace("#dump ", "dump ")
         lmpintxt = lmpintxt.replace("#dump_modify ", "dump_modify ")
+        lmpintxt = lmpintxt.replace("kspace_modify ", "#kspace_modify ")
         lmpintxt += additional_lmpcmds_box
-        open('pyxtal_mod.in', 'a').write(lmpintxt)
+        open('pyxtal_mod.in', 'w').write(lmpintxt)
         cmd = '../../lmp -in pyxtal_mod.in -log lmp.log > /dev/null'
         _ = subprocess.getoutput(cmd)
         cputime = subprocess.getoutput("tail -n 1 lmp.log").split()[-1]

@@ -37,6 +37,7 @@ class FixSymmetry : public Fix {
   double symprec;  // Tolerance for position displacement
   bool symcell;   // Symmetrize cell
   bool symposs;  // Symmetrize position
+  bool no_average;
   bool debug;
 
   double sym_cell[3][3];
@@ -79,6 +80,7 @@ class FixSymmetry : public Fix {
   void check_symmetry(bool, bool, bool);
 
   void symmetrize_rank1(std::vector<double[3]> &vec, double cell[3][3], double inv_cell[3][3]);
+  void symmetrize_rank1(std::vector<double[3]> &vec, double cell[3][3], double inv_cell[3][3], int istart);
   void symmetrize_rank2(double vec[3][3], double cell[3][3], double inv_cell[3][3]);
 
 };
